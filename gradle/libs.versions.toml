@@ -1,0 +1,158 @@
+# Single source of truth for every dependency version in the project.
+# Versions verified against Maven Central / Google Maven on 2026-09-28 — not from memory.
+#
+# Read the notes in this file before bumping anything; several of these versions
+# have non-obvious constraints that break the build in confusing ways.
+
+[versions]
+# --- Build tooling -----------------------------------------------------------
+# AGP 9 compiles Kotlin itself (android.builtInKotlin) and uses the new DSL
+# (android.newDsl). Consequences, which the convention plugins depend on:
+#   * do NOT apply org.jetbrains.kotlin.android to Android modules
+#   * CommonExtension has no type parameters (not CommonExtension<*,*,*,*,*,*>)
+#   * kotlinOptions {} is gone; use kotlin { compilerOptions { } }
+#   * kapt is unusable; everything is KSP
+agp = "9.2.1"
+kotlin = "2.4.20"
+# KSP dropped the "<kotlin>-<ksp>" scheme at 2.3.0. There is NO 2.4.20-2.0.x
+# artifact; versions are plain semver and the "2.3" prefix does not mean
+# Kotlin 2.3. Decoupled from the compiler on purpose.
+ksp = "2.3.12"
+
+# --- SDK levels --------------------------------------------------------------
+# compileSdk must be 37: Compose BOM 2026.09.00 pulls compose runtime 1.12.x,
+# which refuses to be consumed by a module compiled against 36. Verified by
+# build failure, not assumption.
+compileSdk = "37"
+targetSdk = "36"
+minSdk = "26"
+
+# --- AndroidX / Compose ------------------------------------------------------
+# The BOM governs every androidx.compose.* artifact; leave those version-less.
+composeBom = "2026.09.00"
+coreKtx = "1.19.1"
+activityCompose = "1.13.0"
+# Pin the WHOLE lifecycle group here. 2.12 is alpha-only for viewmodel-compose;
+# mixing a 2.11 runtime with a 2.12-alpha viewmodel artifact gives
+# NoSuchMethodError at runtime.
+lifecycle = "2.11.0"
+# navigation-compose 2.x. Navigation3 (1.2.0) is a parallel library with a
+# different back-stack model, not an upgrade — migrating is a rewrite.
+navigation = "2.10.2"
+
+# --- DI ----------------------------------------------------------------------
+# Hilt 2.59 was the first release supporting AGP 9 and it dropped AGP 8.
+# There is no downgrade path below 2.59 on this AGP.
+hilt = "2.60.1"
+# androidx.hilt is a DIFFERENT artifact group from com.google.dagger.
+# androidx.hilt:hilt-compiler != com.google.dagger:hilt-compiler; hilt-work
+# needs both KSP processors registered.
+androidxHilt = "1.4.0"
+
+# --- Persistence / background ------------------------------------------------
+room = "2.8.5"
+work = "2.12.0"
+
+# --- Network -----------------------------------------------------------------
+retrofit = "3.0.0"
+okhttp = "5.5.0"
+kotlinxSerialization = "1.11.0"
+
+# --- Async -------------------------------------------------------------------
+# Shares a version number with kotlinx-serialization-json by coincidence;
+# unrelated release lines.
+coroutines = "1.11.0"
+
+# --- Test --------------------------------------------------------------------
+junit = "4.13.2"
+androidxTestJunit = "1.3.0"
+espresso = "3.7.0"
+turbine = "1.2.1"
+robolectric = "4.17"
+
+[libraries]
+# --- Kotlin / coroutines -----------------------------------------------------
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# --- AndroidX core -----------------------------------------------------------
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
+
+# --- Compose (versions come from the BOM) ------------------------------------
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+# --- Navigation --------------------------------------------------------------
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+androidx-navigation-testing = { group = "androidx.navigation", name = "navigation-testing", version.ref = "navigation" }
+
+# --- Hilt --------------------------------------------------------------------
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "androidxHilt" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidxHilt" }
+
+# --- Room --------------------------------------------------------------------
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+
+# --- WorkManager -------------------------------------------------------------
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }
+
+# --- Network -----------------------------------------------------------------
+retrofit-core = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+# Retrofit 3's own converter — NOT Jake Wharton's retrofit2-kotlinx-serialization-converter,
+# and not bundled into retrofit itself.
+retrofit-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
+okhttp-bom = { group = "com.squareup.okhttp3", name = "okhttp-bom", version.ref = "okhttp" }
+okhttp-core = { group = "com.squareup.okhttp3", name = "okhttp" }
+okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver" }
+
+# --- Test --------------------------------------------------------------------
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+
+# --- Dependencies of build-logic ---------------------------------------------
+# Referenced from build-logic's own build file so plugin classpath versions stay
+# in this catalog rather than being hardcoded there.
+android-gradle-plugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
+kotlin-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+compose-compiler-gradle-plugin = { group = "org.jetbrains.kotlin", name = "compose-compiler-gradle-plugin", version.ref = "kotlin" }
+ksp-gradle-plugin = { group = "com.google.devtools.ksp", name = "com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
+hilt-gradle-plugin = { group = "com.google.dagger", name = "hilt-android-gradle-plugin", version.ref = "hilt" }
+room-gradle-plugin = { group = "androidx.room", name = "room-gradle-plugin", version.ref = "room" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+# The Compose compiler plugin is still applied separately under built-in Kotlin.
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+room = { id = "androidx.room", version.ref = "room" }

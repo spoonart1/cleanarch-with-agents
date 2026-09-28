@@ -1,0 +1,28 @@
+*.iml
+.gradle/
+.kotlin/
+build/
+captures/
+.externalNativeBuild
+.cxx
+
+# IDE
+.idea/
+*.hprof
+
+# Local machine config — contains the absolute SDK path
+local.properties
+
+# Secrets: never commit signing material or service configs.
+# Release signing values are read from environment variables instead; see app/build.gradle.kts.
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+google-services.json
+*.p8
+*.p12
+*.mobileprovision
+secrets.properties
+
+.DS_Store

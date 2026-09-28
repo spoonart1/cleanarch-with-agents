@@ -1,0 +1,18 @@
+# Normalise line endings so the repo behaves identically on Windows, macOS and
+# Linux CI runners.
+* text=auto eol=lf
+
+# The Gradle wrapper script MUST keep LF endings; CRLF makes it unrunnable on
+# Linux and macOS, which would break CI and a fresh clone for most contributors.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows-only files keep CRLF.
+gradlew.bat text eol=crlf
+
+# Binary files must never be normalised.
+gradle/wrapper/gradle-wrapper.jar binary
+*.jar binary
+*.png binary
+*.webp binary
+*.jpg binary
