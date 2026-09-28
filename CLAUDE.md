@@ -9,7 +9,31 @@ offline-first sync. It is meant to be **read and learned from**, so prefer clari
 no reflection tricks, no clever generics, no abbreviations a newcomer would have to decode.
 
 Build status: Phase 1 of 7 complete (skeleton only). Most modules are empty directories with a build
-file. See "Build phases" below before assuming a module should contain something.
+file. See "Build phases" before assuming a module should contain something.
+
+## How to work here
+
+**Work in small, compilable steps.** For anything beyond a trivial edit — a new screen, ViewModel,
+repository, or use case — plan first, get agreement, then build it in pieces rather than emitting a
+finished file in one response. Each step should leave the code compiling, so a failure points at the
+edit that caused it. Prefer `Edit` on an existing file over rewriting it wholesale.
+
+A workable order for a new component:
+
+1. Skeleton — package, imports, declaration, constructor, public API
+2. State and data structures
+3. Business logic
+4. UI and event wiring
+5. Previews, sample data, docs
+
+**Verify, don't assume.** Run the build after multi-file changes. Surface dependency and version
+conflicts before working around them — a version pin chosen silently becomes someone else's puzzle.
+
+**Ask rather than guess when an API is uncertain.** A wrong guess in a template teaches the wrong
+thing to everyone who clones it.
+
+Each phase ends with `./gradlew build test` passing, a conventional commit, and **a stop for
+maintainer confirmation before the next phase begins.**
 
 ## Commands
 
@@ -21,8 +45,10 @@ file. See "Build phases" below before assuming a module should contain something
 ./gradlew :core:sync:test --tests "*OutboxTest.replays*"  # one method
 ./gradlew lint                   # lint only
 ./gradlew projects               # confirm module wiring
-./gradlew :app:dependencies --configuration debugCompileClasspath   # check boundaries
+./gradlew :feature:settings:impl:dependencies --configuration debugCompileClasspath | grep feature
 ```
+
+That last command is the architectural check — run it after touching module dependencies. See rule 1.
 
 Instrumented tests (`connectedAndroidTest`) need a running emulator. **The maintainer runs those, not
 the agent** — write them, but do not attempt to execute them.
@@ -44,6 +70,9 @@ network directly. A write goes to Room *and* appends an outbox row in the same t
 engine drains the outbox separately. This is the core idea of the template — if a change would let
 the UI read a network response directly, it is wrong.
 
+Features contribute navigation entries through Hilt multibindings (`@IntoSet`), so `app` has no
+central registration list to forget. Adding a feature must not require editing a shared file.
+
 ### Rules that must not be broken
 
 These are the point of the template. Violating one silently defeats its purpose:
@@ -60,16 +89,14 @@ These are the point of the template. Violating one silently defeats its purpose:
 5. **Prefer fakes over mocks** in tests. Shared fakes live in `core:testing`.
 6. **Every multi-table write happens in one transaction.**
 
-Verify rule 1 after touching module dependencies:
+### Code conventions
 
-```bash
-./gradlew :feature:settings:impl:dependencies --configuration debugCompileClasspath | grep feature
-```
-
-### Navigation
-
-Features contribute their navigation entries through Hilt multibindings (`@IntoSet`), so `app` has no
-central registration list to forget. Adding a feature must not require editing a shared file.
+- Split composables into a stateful wrapper that reads the ViewModel and a stateless one that takes
+  state plus lambdas. Only the stateless one is previewable and cheap to test; give it a `@Preview`.
+- ViewModels expose one immutable UI state as a `StateFlow`; screens render it and emit events up.
+- Use UI-specific models in the UI layer, not domain or database types directly.
+- Use stable keys in lazy lists.
+- Map between database, network and domain models in `core:data` — those types must not leak past it.
 
 ## Build system — read this before touching `build-logic`
 
@@ -107,6 +134,8 @@ non-obvious constraints. Read those before bumping anything. In particular:
 - **KSP no longer pairs with the Kotlin version.** There is no `2.4.20-2.0.x`; it is plain semver
   (`2.3.12`) and the `2.3` prefix does not mean Kotlin 2.3.
 - **Hilt cannot go below 2.59** on AGP 9 (2.59 dropped AGP 8 support).
+- **Pin the whole `androidx.lifecycle` group together.** Mixing a 2.11 runtime with a 2.12-alpha
+  viewmodel artifact gives `NoSuchMethodError` at runtime.
 - `androidx.hilt:hilt-compiler` and `com.google.dagger:hilt-compiler` are different artifacts;
   `hilt-work` needs both KSP processors.
 
@@ -136,9 +165,6 @@ gitignored. Never introduce a code path that reads signing material from a file 
 
 ## Build phases
 
-Work proceeds one phase at a time. Each ends with `./gradlew build test` passing, a
-conventional-commit, and **a stop for maintainer confirmation before the next phase begins.**
-
 1. ✅ Skeleton — version catalog, `build-logic`, empty modules, placeholder app
 2. `core:model`, `core:common`, `core:database`, `core:network` (fake backend + network simulator)
 3. `core:sync`, `core:data`
@@ -149,12 +175,3 @@ conventional-commit, and **a stop for maintainer confirmation before the next ph
 
 Out of scope for v1 (roadmap only): photo attachments, conflict-resolution UI, Macrobenchmark and
 baseline profiles, Fastlane, a real backend.
-
-## Conventions
-
-- ViewModels expose one immutable UI state as a `StateFlow`; screens render it and emit events up.
-- Use UI-specific models in the UI layer, not domain or database types directly.
-- Use stable keys in lazy lists.
-- Map between database, network and domain models in `core:data` — those types must not leak past it.
-- Ask rather than guess when an API is uncertain. A wrong guess in a template teaches the wrong
-  thing to everyone who clones it.
