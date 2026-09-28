@@ -40,3 +40,15 @@ data class ChecklistWithItems(
     val checklist: Checklist,
     val items: List<ChecklistItem>,
 )
+
+/**
+ * A [Checklist] with its item counts, as a list screen needs it.
+ *
+ * The counts come from an aggregate query rather than from loading every
+ * item, so showing a hundred checklists stays one query.
+ */
+data class ChecklistSummary(
+    val checklist: Checklist,
+    val itemCount: Int,
+    val doneCount: Int,
+)

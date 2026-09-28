@@ -4,64 +4,36 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.spoonart1.cleanarchwithagent.designsystem.navigation.FeatureNavigation
+import io.github.spoonart1.cleanarchwithagent.designsystem.theme.CleanArchTheme
+import io.github.spoonart1.cleanarchwithagent.navigation.CleanArchNavHost
+import javax.inject.Inject
 
 /**
- * The only Activity in the app. It hosts the navigation graph and applies the
- * design-system theme.
+ * The only Activity. It applies the theme and hosts the navigation graph.
  *
- * Phase 4 replaces the placeholder with the navigation host assembled from the
- * features' Hilt multibindings.
+ * [featureNavigations] arrives as a multibound `Set`, so this class does not
+ * name a single feature and never needs editing when one is added.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var featureNavigations: Set<@JvmSuppressWildcards FeatureNavigation>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
         setContent {
-            MaterialTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PlaceholderScreen(modifier = Modifier.padding(innerPadding))
-                }
+            CleanArchTheme {
+                CleanArchNavHost(
+                    navController = rememberNavController(),
+                    featureNavigations = featureNavigations,
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "CleanArchWithAgent",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            text = "Phase 1: skeleton is up. Features arrive in Phase 4.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PlaceholderScreenPreview() {
-    MaterialTheme {
-        PlaceholderScreen()
     }
 }

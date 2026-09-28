@@ -20,6 +20,27 @@ interface ChecklistDao {
     @Query("SELECT * FROM checklists WHERE is_deleted = 0 ORDER BY updated_at DESC")
     fun observeChecklists(): Flow<List<ChecklistEntity>>
 
+    /**
+     * Checklists with their item counts, for the list screen.
+     *
+     * The counts are aggregated in SQL rather than by observing each
+     * checklist's items separately, which would be one flow per row.
+     */
+    @Query(
+        """
+        SELECT c.*,
+               COUNT(i.id) AS item_count,
+               COALESCE(SUM(CASE WHEN i.is_done THEN 1 ELSE 0 END), 0) AS done_count
+        FROM checklists c
+        LEFT JOIN checklist_items i
+               ON i.checklist_id = c.id AND i.is_deleted = 0
+        WHERE c.is_deleted = 0
+        GROUP BY c.id
+        ORDER BY c.updated_at DESC
+        """,
+    )
+    fun observeChecklistSummaries(): Flow<List<ChecklistSummary>>
+
     @Query("SELECT * FROM checklists WHERE id = :id AND is_deleted = 0")
     fun observeChecklist(id: String): Flow<ChecklistEntity?>
 

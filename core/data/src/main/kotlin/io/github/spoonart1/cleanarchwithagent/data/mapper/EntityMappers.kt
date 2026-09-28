@@ -4,6 +4,8 @@ import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistEntity
 import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistItemEntity
 import io.github.spoonart1.cleanarchwithagent.model.Checklist
 import io.github.spoonart1.cleanarchwithagent.model.ChecklistItem
+import io.github.spoonart1.cleanarchwithagent.model.ChecklistSummary
+import io.github.spoonart1.cleanarchwithagent.database.dao.ChecklistSummary as DatabaseChecklistSummary
 
 /**
  * Database types in, domain types out.
@@ -18,6 +20,12 @@ internal fun ChecklistEntity.toDomain() = Checklist(
     title = title,
     updatedAt = updatedAt,
     syncStatus = syncStatus,
+)
+
+internal fun DatabaseChecklistSummary.toDomain() = ChecklistSummary(
+    checklist = checklist.toDomain(),
+    itemCount = itemCount,
+    doneCount = doneCount,
 )
 
 internal fun ChecklistItemEntity.toDomain() = ChecklistItem(

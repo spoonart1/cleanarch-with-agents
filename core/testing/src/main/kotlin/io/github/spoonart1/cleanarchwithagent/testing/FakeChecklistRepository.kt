@@ -3,10 +3,12 @@ package io.github.spoonart1.cleanarchwithagent.testing
 import io.github.spoonart1.cleanarchwithagent.data.ChecklistRepository
 import io.github.spoonart1.cleanarchwithagent.model.Checklist
 import io.github.spoonart1.cleanarchwithagent.model.ChecklistItem
+import io.github.spoonart1.cleanarchwithagent.model.ChecklistSummary
 import io.github.spoonart1.cleanarchwithagent.model.SyncState
 import io.github.spoonart1.cleanarchwithagent.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -32,6 +34,18 @@ class FakeChecklistRepository : ChecklistRepository {
     private var nextId = 1
 
     override fun observeChecklists(): Flow<List<Checklist>> = checklists
+
+    override fun observeChecklistSummaries(): Flow<List<ChecklistSummary>> =
+        combine(checklists, items) { checklists, items ->
+            checklists.map { checklist ->
+                val own = items.filter { it.checklistId == checklist.id }
+                ChecklistSummary(
+                    checklist = checklist,
+                    itemCount = own.size,
+                    doneCount = own.count { it.isDone },
+                )
+            }
+        }
 
     override fun observeChecklist(id: String): Flow<Checklist?> =
         checklists.map { all -> all.firstOrNull { it.id == id } }

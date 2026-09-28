@@ -8,8 +8,8 @@ An open-source Android starter template demonstrating multi-module Clean Archite
 offline-first sync. It is meant to be **read and learned from**, so prefer clarity over cleverness:
 no reflection tricks, no clever generics, no abbreviations a newcomer would have to decode.
 
-Build status: Phase 1 of 7 complete (skeleton only). Most modules are empty directories with a build
-file. See "Build phases" before assuming a module should contain something.
+Build status: Phases 1–4 and 6 complete. The app runs end to end against an in-memory fake backend.
+Remaining: CI and app smoke tests (5), README (7). See "Build phases".
 
 ## How to work here
 
@@ -52,6 +52,12 @@ That last command is the architectural check — run it after touching module de
 
 Instrumented tests (`connectedAndroidTest`) need a running emulator. **The maintainer runs those, not
 the agent** — write them, but do not attempt to execute them.
+
+Compose UI tests and DAO tests run on Robolectric, so they are part of `./gradlew test` and need no
+emulator. A module with Compose UI tests needs
+`src/test/resources/robolectric.properties` containing `sdk=34`: Espresso's input injection calls
+`InputManager.getInstance()`, which no longer exists on SDK 37, so without it every Compose test
+fails with `NoSuchMethodException`.
 
 Gradle's daemon holds file locks on Windows. If a directory won't delete, run `./gradlew --stop`
 first.
@@ -166,11 +172,11 @@ gitignored. Never introduce a code path that reads signing material from a file 
 ## Build phases
 
 1. ✅ Skeleton — version catalog, `build-logic`, empty modules, placeholder app
-2. `core:model`, `core:common`, `core:database`, `core:network` (fake backend + network simulator)
-3. `core:sync`, `core:data`
-4. `core:designsystem`, both features, navigation assembly
+2. ✅ `core:model`, `core:common`, `core:database`, `core:network` (fake backend + network simulator)
+3. ✅ `core:sync`, `core:data`
+4. ✅ `core:designsystem`, both features, navigation assembly
 5. CI workflow, app smoke tests
-6. This file, and the `new-feature-module` skill
+6. ✅ This file, and the `new-feature-module` skill
 7. README
 
 Out of scope for v1 (roadmap only): photo attachments, conflict-resolution UI, Macrobenchmark and

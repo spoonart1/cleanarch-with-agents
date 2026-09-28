@@ -55,5 +55,7 @@ internal fun Project.allowModulesWithoutTests() {
             "--add-opens=java.base/java.lang=ALL-UNNAMED",
             "--add-opens=java.base/java.io=ALL-UNNAMED",
         )
+
+        systemProperty("robolectric.graphicsMode", "NATIVE")
     }
 }

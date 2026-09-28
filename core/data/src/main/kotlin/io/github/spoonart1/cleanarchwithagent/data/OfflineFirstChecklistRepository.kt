@@ -9,6 +9,7 @@ import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistItemEntit
 import io.github.spoonart1.cleanarchwithagent.database.entity.OutboxEntity
 import io.github.spoonart1.cleanarchwithagent.model.Checklist
 import io.github.spoonart1.cleanarchwithagent.model.ChecklistItem
+import io.github.spoonart1.cleanarchwithagent.model.ChecklistSummary
 import io.github.spoonart1.cleanarchwithagent.model.OutboxEntityType
 import io.github.spoonart1.cleanarchwithagent.model.OutboxOperationType
 import io.github.spoonart1.cleanarchwithagent.model.SyncState
@@ -38,6 +39,9 @@ class OfflineFirstChecklistRepository @Inject constructor(
 
     override fun observeChecklists(): Flow<List<Checklist>> =
         checklistDao.observeChecklists().map { entities -> entities.map { it.toDomain() } }
+
+    override fun observeChecklistSummaries(): Flow<List<ChecklistSummary>> =
+        checklistDao.observeChecklistSummaries().map { rows -> rows.map { it.toDomain() } }
 
     override fun observeChecklist(id: String): Flow<Checklist?> =
         checklistDao.observeChecklist(id).map { it?.toDomain() }

@@ -2,6 +2,7 @@ package io.github.spoonart1.cleanarchwithagent.data
 
 import io.github.spoonart1.cleanarchwithagent.model.Checklist
 import io.github.spoonart1.cleanarchwithagent.model.ChecklistItem
+import io.github.spoonart1.cleanarchwithagent.model.ChecklistSummary
 import io.github.spoonart1.cleanarchwithagent.model.SyncState
 import kotlinx.coroutines.flow.Flow
 
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.Flow
 interface ChecklistRepository {
 
     fun observeChecklists(): Flow<List<Checklist>>
+
+    /** Checklists with their item counts, for a list screen. */
+    fun observeChecklistSummaries(): Flow<List<ChecklistSummary>>
 
     fun observeChecklist(id: String): Flow<Checklist?>
 

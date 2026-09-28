@@ -194,17 +194,34 @@ anything: AGP 8 examples found online do not compile against this build.
 ## 9. Navigation registration
 
 Features register their navigation through Hilt multibindings (`@IntoSet`), so that adding a feature
-never requires editing a shared list in `app`.
+never requires editing a shared list in `app`. Implement `FeatureNavigation` from
+`core:designsystem` and bind it:
 
-**Check whether `app` already has the navigation assembly before doing this step.** If
-`app/src/main/kotlin/.../navigation/` does not exist yet, that infrastructure has not been built
-(it lands in Phase 4 — see `CLAUDE.md`). In that case: stop, leave the feature without navigation
-wiring, and tell the maintainer it needs hooking up once the assembly exists. Do not invent a
-parallel registration mechanism, and do not add a manual entry to a central list — either would
-defeat the design.
+```kotlin
+class ${Feature}Navigation @Inject constructor() : FeatureNavigation {
+    override fun register(builder: NavGraphBuilder, navController: NavHostController) {
+        builder.composable(${FEATURE}_ROUTE) {
+            ${Feature}Screen(onBack = { navController.popBackStack() })
+        }
+    }
+}
 
-Once the assembly exists, follow the pattern used by `feature:checklists:impl`; mirror it exactly
-rather than designing a new one.
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class ${Feature}NavigationModule {
+    @Binds
+    @IntoSet
+    abstract fun binds${Feature}Navigation(impl: ${Feature}Navigation): FeatureNavigation
+}
+```
+
+Then add the module to `app/build.gradle.kts` as an `implementation` dependency — that is the only
+edit outside the feature, and it exists solely to put the binding on the classpath. **Do not add the
+route to a list anywhere.** If you find yourself editing a `when` or an array of routes, stop: that
+is the design this replaces.
+
+Mirror `feature:checklists:impl/navigation/ChecklistsNavigation.kt` rather than inventing a variant.
+To navigate to another feature, import its route from that feature's `api` module.
 
 ## Report back
 
@@ -214,7 +231,7 @@ incomplete, say so — do not describe a partially wired feature as finished.
 
 ---
 
-*Verified 2026-09-28 by generating a throwaway `reports` feature: both tests executed
+*Steps 1–8 verified 2026-09-28 by generating a throwaway `reports` feature: both tests executed
 (`tests="2" skipped="0" failures="0"`), `./gradlew build test` passed, and the boundary check showed
-only `:feature:reports:api`. Steps 1–8 are known to work; step 9 is untested because the navigation
-assembly does not exist yet.*
+only `:feature:reports:api`. Step 9 now mirrors the real assembly shipped in Phase 4
+(`ChecklistsNavigation`, `SettingsNavigation`) but has not itself been re-run end to end.*

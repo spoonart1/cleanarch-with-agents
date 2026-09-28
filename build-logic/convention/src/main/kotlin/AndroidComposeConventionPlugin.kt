@@ -33,6 +33,9 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
             add("implementation", library("androidx-compose-ui"))
             add("implementation", library("androidx-compose-ui-graphics"))
             add("implementation", library("androidx-compose-ui-tooling-preview"))
+            // Icons are used by essentially every screen; keeping them here
+            // stops each feature from re-declaring the same dependency.
+            add("implementation", library("androidx-compose-material-icons-extended"))
             add("implementation", library("androidx-lifecycle-runtime-compose"))
 
             // ui-tooling carries the @Preview renderer and is debug-only so it
@@ -41,6 +44,12 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
             add("debugImplementation", library("androidx-compose-ui-test-manifest"))
 
             add("androidTestImplementation", library("androidx-compose-ui-test-junit4"))
+
+            // Compose UI tests also run on the JVM via Robolectric, so they
+            // execute in `./gradlew test` and in CI with no emulator.
+            add("testImplementation", library("androidx-compose-ui-test-junit4"))
+            add("testImplementation", library("androidx-compose-ui-test-manifest"))
+            add("testImplementation", library("robolectric"))
         }
     }
 }

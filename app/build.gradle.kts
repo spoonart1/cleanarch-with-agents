@@ -60,10 +60,15 @@ dependencies {
 
     implementation(projects.feature.checklists.impl)
     implementation(projects.feature.settings.impl)
+    // For the start destination's route. app depends on impl modules to get
+    // their navigation bindings onto the classpath, but reads routes from api.
+    implementation(projects.feature.checklists.api)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    // ProcessLifecycleOwner, for the foreground sync trigger.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
