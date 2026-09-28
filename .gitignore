@@ -13,6 +13,10 @@ captures/
 # Local machine config — contains the absolute SDK path
 local.properties
 
+# Local shell environment files, created by some terminals on Windows.
+.bashrc
+.bashrcexport
+
 # Secrets: never commit signing material or service configs.
 # Release signing values are read from environment variables instead; see app/build.gradle.kts.
 *.jks

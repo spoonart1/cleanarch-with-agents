@@ -12,6 +12,8 @@ android {
 dependencies {
     api(projects.core.model)
     api(projects.core.data)
+    // TestClock and TestIdGenerator implement interfaces from core:common.
+    api(projects.core.common)
 
     api(libs.junit)
     api(libs.kotlinx.coroutines.test)
