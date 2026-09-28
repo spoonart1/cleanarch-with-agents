@@ -43,5 +43,17 @@ internal fun Project.configureKotlinCompilerOptions() {
 internal fun Project.allowModulesWithoutTests() {
     tasks.withType(Test::class.java).configureEach {
         failOnNoDiscoveredTests.set(false)
+
+        // Robolectric 4.17's FileDescriptorInterceptor reads the JDK-internal
+        // jdk.internal.access.SharedSecrets, which java.base does not export to
+        // unnamed modules on JDK 17+. Without the export every Robolectric test
+        // dies in sandbox setup with "Failed to interact with raw FileDescriptor
+        // internals". Note this needs --add-exports, not just --add-opens.
+        // Scoped to the test JVM only.
+        jvmArgs(
+            "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "--add-opens=java.base/java.io=ALL-UNNAMED",
+        )
     }
 }

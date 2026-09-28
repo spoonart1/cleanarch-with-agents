@@ -1,10 +1,10 @@
 import io.github.spoonart1.cleanarchwithagent.buildlogic.allowModulesWithoutTests
 import io.github.spoonart1.cleanarchwithagent.buildlogic.configureKotlinCompilerOptions
 import io.github.spoonart1.cleanarchwithagent.buildlogic.library
-import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 
@@ -24,9 +24,12 @@ class JvmLibraryConventionPlugin : Plugin<Project> {
         // opaque external dependency and lint stops analysing its sources.
         pluginManager.apply("com.android.lint")
 
+        // Unlike the Android modules, this one applies the Kotlin Gradle plugin
+        // directly, so Kotlin does not inherit its target from AGP's
+        // compileOptions — it would default to the JDK running Gradle (21) and
+        // disagree with Java's 17. A toolchain sets both from one value.
         extensions.configure<JavaPluginExtension> {
-            sourceCompatibility = JavaVersion.VERSION_17
-            targetCompatibility = JavaVersion.VERSION_17
+            toolchain.languageVersion.set(JavaLanguageVersion.of(17))
         }
 
         configureKotlinCompilerOptions()
