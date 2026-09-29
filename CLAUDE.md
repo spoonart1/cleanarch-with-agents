@@ -118,53 +118,26 @@ These are the point of the template. Violating one silently defeats its purpose:
 
 ### Code conventions
 
-These are enforced by detekt (`./gradlew detektAll`), not just documented. The configuration is
-`config/detekt/detekt.yml`, which layers over detekt's defaults rather than replacing them, and every
-deviation in it carries a comment explaining why.
+**The canonical source is [`.claude/conventions.md`](.claude/conventions.md).** It covers naming
+(booleans, test names), test structure (Given/When/Then), function length, the testing rules, the
+90% coverage gate, Compose and state, modern-Android practice, and the tooling facts that change how
+those rules behave. The agents in `.claude/agents/` read it too, so there is one place to edit and
+nothing to keep in sync.
 
-**Naming**
+In brief — read the file for the detail and the reasoning:
 
-- **Booleans read as a question**: `isLoading`, `hasItems`, `canRetry` — never a bare noun like
-  `loading`. Enforced by the custom `cleanarch:BooleanPropertyNaming` rule for declared types, and by
-  detekt's own `naming:BooleanPropertyNaming` for inferred ones. A wire model keeps its server field
-  name via `@SerialName("deleted") val isDeleted: Boolean`.
-- **Test names read as a sentence**: `test <function> when <clause> should <result>`, backticked. For
-  example ``fun `test getName when success should return true`()``. Enforced by the custom
-  `cleanarch:TestFunctionNaming` rule. The point is that a CI failure says what broke without anyone
-  opening the file.
+- **Booleans read as a question** (`isLoading`, `hasItems`, `canRetry`), enforced by a custom detekt
+  rule.
+- **Test names read as a sentence**: `test <function> when <clause> should <result>`, backticked and
+  enforced.
+- **Test bodies are Given / When / And / Then** — a convention, not a detekt rule.
+- **Functions stay under 20 lines**, `@Composable`/`@Preview` and test sources exempt.
+- **Fakes over mocks.** No mocking library is on any classpath, deliberately.
+- **Business logic is gated at 90% line coverage.** Exclusions are for code with no logic, never for
+  code that is merely hard to test.
 
-**Structure**
-
-- **Test bodies are Given / When / And / Then**, marked with those comments in that order. `// And`
-  is optional and marks a second setup step or a second action. This is a convention, not a detekt
-  rule — a rule for it produces false positives on every table-driven or Turbine-based test.
-- **Functions stay under 20 lines.** Enforced by `complexity:LongMethod`. `@Composable` and
-  `@Preview` are exempt: a declarative UI tree is one expression, and splitting it to satisfy a line
-  count makes it harder to read. Test sources are exempt too, since Given/When/Then with a realistic
-  fixture routinely runs longer and extracting the setup moves it away from the assertion it explains.
-
-**Coverage**
-
-- Business logic is gated at **90% line coverage**: use cases, repositories, ViewModels, mappers, the
-  sync engine, and anything else matching `businessLogicIncludes` in
-  `build-logic/convention/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/buildlogic/Jacoco.kt`.
-- The report (`jacocoTestReportAll`) covers the whole module so the number is informative; the gate
-  (`jacocoCoverageVerificationAll`) measures only that business-logic subset so it stays meaningful.
-  Gating on Compose UI would measure rendering rather than correctness, and a gate people learn to
-  ignore is worse than none.
-- Excluded from both: generated code (Hilt, Room, serialization), Compose screens and previews, and
-  thin framework adapters such as `RetrofitNetworkDataSource` and `WorkManagerSyncScheduler` that
-  contain no decision of our own. **Exclusions are for code with no logic, never for code that is
-  merely hard to test** — if a class is hard to test and has logic, that is a design signal.
-
-**Composables and state**
-
-- Split composables into a stateful wrapper that reads the ViewModel and a stateless one that takes
-  state plus lambdas. Only the stateless one is previewable and cheap to test; give it a `@Preview`.
-- ViewModels expose one immutable UI state as a `StateFlow`; screens render it and emit events up.
-- Use UI-specific models in the UI layer, not domain or database types directly.
-- Use stable keys in lazy lists.
-- Map between database, network and domain models in `core:data` — those types must not leak past it.
+The architectural rules that must not be broken are above, in "Rules that must not be broken"; those
+stay here because they define the template rather than its style.
 
 ## Build system — read this before touching `build-logic`
 

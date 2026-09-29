@@ -55,39 +55,30 @@ Judge code against current practice, not habit: flag a pattern as dated only whe
 
 ## Step 2: Code conventions
 
-**Boolean naming**
-- A Boolean must read as a question. The allowed prefixes are the `allowedPrefixes` list in
-  `tools/detekt-rules/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/detekt/BooleanPropertyNaming.kt` —
-  currently `is`, `has`, `can`, `should`, `are`, `was`, `were`, `will`, `does`, `did`. **Read that list rather than this one**, which will drift.
-- `isLoading`, `hasItems` and `canRetry` are all correct. A bare noun such as `loading` or `deleted` is the violation. Do not flag `has`/`can`/`should` — forcing `isHasItems` would be worse than the problem the rule solves.
-- The prefix must be followed by an uppercase letter, so `island` is correctly flagged and `isLoading` is not.
-- Wire and database models keep their server field name via `@SerialName("deleted") val isDeleted: Boolean`. The Kotlin name is what the rule governs; do not suggest changing the serialised name.
-- The custom rule only sees **declared** types (`val done: Boolean`). detekt's own `naming:BooleanPropertyNaming` covers inferred ones and needs type resolution, which is off in this project — so an inferred boolean (`val done = true`) will not be caught by tooling. Flag those by eye.
-- Exception: names you can't change because they override a framework or library API. Mention these only if they look intentional.
+**Read `.claude/conventions.md` and review against it.** It is the canonical source for every rule
+below; this file deliberately does not restate them, so the two cannot drift apart.
 
-**Function length**
-- At most 20 lines, enforced by `complexity:LongMethod` (threshold 20) in `config/detekt/detekt.yml`.
-- **Count the way detekt counts**, or your finding will disagree with CI. detekt's `LongMethod` does not exclude blank or comment-only lines, and it includes the signature line. Do not subtract them. If you are within a line or two of the threshold, trust `detektAll` over your own count and say so.
-- Exception: functions annotated `@Composable` or `@Preview` (`ignoreAnnotated` in the config).
-- Test sources are exempt (`excludes: ['**/test/**', '**/androidTest/**']`): a Given/When/Then test with a realistic fixture routinely runs longer, and extracting the setup moves it away from the assertion it explains.
-- For each violation, give the line count detekt reports and suggest where the function could be split. Prefer extracting a genuinely cohesive step — a split made only to get under the number is worse than the long function.
+Check the change against, at minimum:
 
-**Unit test naming**
-- Test function names must follow `test <functionName> when <condition> should <expected result>`, written as a Kotlin backtick name, e.g. ``fun `test getName when success should return true`()``.
-- All three keywords are literal and required: `test`, `when`, **and `should`**. The enforcing regex is `NAME_PATTERN` in
-  `tools/detekt-rules/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/detekt/TestFunctionNaming.kt` —
-  currently `^test\s+\S.*\swhen\s+\S.*\sshould\s+\S.*$`. Each of the three segments must be non-empty, so `test when should` fails.
-- The rule fires on functions annotated `@Test`, `@ParameterizedTest`, or `@RepeatedTest`, and is scoped to `**/test/**` and `**/androidTest/**` in the config.
-- For instrumented tests under `src/androidTest`, don't flag the lack of spaces, because method names with spaces aren't supported by the Android runtime; note it instead if the team hasn't picked an alternative format.
+- **Boolean naming** (§1) — including that `has`/`can`/`should` are *correct* and must not be flagged,
+  and that inferred booleans (`val done = true`) are invisible to tooling and need your eye.
+- **Test naming** (§1) — the literal `test`/`when`/`should` keywords.
+- **Given/When/Then structure** (§2) — *not* machine-checked, so it is entirely on you. A false
+  positive here is costly because no tool output will correct you.
+- **Function length** (§2) — count the way detekt counts: blank and comment lines included, signature
+  line included. Within a line or two of the threshold, trust `detektAll` over your own count.
+- **Testing rules** (§3) and **coverage honesty** (§4) — especially that an added `coverageExclusions`
+  entry used to silence a failing gate is a finding, not a fix.
 
-**Unit test structure**
-- Each test body must be split with these comments in order, **with a space after the slashes** (`// Given`, not `//Given`) — that is the form used throughout this repo and what Kotlin formatting conventions produce:
-  - `// Given` to prepare the properties
-  - `// When` to perform the action
-  - `// And` for a further setup step or a further action, only when there is one
-  - `// Then` to verify or assert
-- Flag tests that are missing `// Given`, `// When`, or `// Then`, have them out of order, or have assertions before `// Then`. Do **not** flag comment spacing itself.
-- This is a documented convention, not a detekt rule — no tool reports it, so it is on you to check. It is also why false positives here are costly: there is no tool output to correct you.
+Two habits that prevent most false positives here:
+
+1. **Do not report a deviation that `config/detekt/detekt.yml` documents as intentional.** Several
+   rules are deliberately disabled or narrowed, each with a comment saying why.
+2. **Do not confuse the two coverage numbers** (§4). A module reporting 67% is not a finding if
+   `jacocoCoverageVerificationAll` passes.
+
+When a rule and this file disagree, `.claude/conventions.md` wins — and say so in your report, since
+that means one of them needs updating.
 
 ## Step 3: General review
 

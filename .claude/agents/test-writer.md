@@ -38,32 +38,20 @@ Never weaken a test to make it pass. If a test you wrote fails, the three possib
 
 ## Step 2: Test conventions
 
-These are enforced by detekt, so a test that breaks them fails CI.
+**Read `.claude/conventions.md` before writing anything.** It is the canonical source; this file does
+not restate the rules, so the two cannot drift apart. The sections you need every time:
 
-**Naming**
-- `test <functionName> when <condition> should <expected result>`, as a Kotlin backtick name:
-  ``fun `test getName when success should return true`()``
-- All three keywords are literal and required: `test`, `when`, **and `should`**. The enforcing regex is `NAME_PATTERN` in
-  `tools/detekt-rules/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/detekt/TestFunctionNaming.kt` —
-  currently `^test\s+\S.*\swhen\s+\S.*\sshould\s+\S.*$`. Each segment must be non-empty, so `test when should` fails.
-- Name the *function under test* as `<functionName>`, not the class. For a Flow property, the property name is right: `test uiState when the checklist is missing should expose an error`.
-- Instrumented tests under `src/androidTest` cannot use spaces in method names; use the project's chosen format there and say so.
+- **§1 Naming** — the test-name format (`test <fn> when <clause> should <result>`, all three keywords
+  literal) and the boolean prefixes, which apply to test code too.
+- **§2 Structure** — `// Given` / `// When` / `// And` / `// Then`, spaced, in order. Not
+  machine-checked, so nothing will catch a mistake for you.
+- **§3 Testing** — fakes over mocks, where the fixtures actually live per module, Turbine and
+  `runTest`, `MainDispatcherRule`, covering branches rather than the happy path.
+- **§4 Coverage** — the two numbers, and chasing coverage honestly.
 
-**Structure**
-- Split every test body with these comments, in order, **with a space after the slashes** (`// Given`, not `//Given`):
-  - `// Given` — prepare the properties
-  - `// When` — perform the action
-  - `// And` — a further setup step or a further action, only when there is one
-  - `// Then` — verify or assert
-- This is a documented convention, not a detekt rule, so nothing will catch a mistake for you.
-- Put the marker where the action genuinely is. With Turbine, the collection block often wraps both the action and the assertion — mark the call that triggers the change as `// When` and the `assert` as `// Then`, rather than labelling the whole block.
-
-**Boolean naming**
-- Booleans in test code follow the same rule as production: `is`, `has`, `can`, `should`, `are`, `was`, `were`, `will`, `does`, `did`, per `allowedPrefixes` in
-  `tools/detekt-rules/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/detekt/BooleanPropertyNaming.kt`.
-
-**Length**
-- Test functions are exempt from the 20-line cap (`excludes: ['**/test/**', '**/androidTest/**']` on `complexity:LongMethod`). Do not contort a test to hit a line count. But `MagicNumber` and `MaxLineLength` are also relaxed for tests — readability still matters, so keep the fixture close to the assertion it explains.
+Test sources are exempt from `LongMethod`, `MagicNumber` and `MaxLineLength` (§2), so do not contort
+a test to hit a line count — but readability still matters. Keep the fixture close to the assertion
+it explains.
 
 ## Step 3: What good looks like here
 

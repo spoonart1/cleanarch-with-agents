@@ -57,14 +57,30 @@ Escalate from casual to deep-dive if, after reading the code the evidence points
 
 ## Rules for suggested fixes
 
-Every fix you suggest must follow the team conventions so it passes code review:
-- Boolean properties, variables, and parameters are named `is` + action/state (for example `isLogin`). No `has`, `can`, or `should` prefixes.
-- Functions other than `@Composable` or `@Preview` stay within 20 lines of body, excluding blank and comment-only lines. Split larger logic into smaller functions.
-- Suggest a unit test for every fix in business logic (UseCase, Repository, Controller, domain/data layers). Name it `test <function> when <clause> should <result>` as a Kotlin backtick name, and structure it with `// Given`, `// When`, optional `// And`, and `// Then`, in that order.
-- The fix must pass detekt; don't suggest suppressing a detekt rule unless you explain why.
-- Fix the cause, not the symptom. Don't suggest catching and ignoring exceptions, adding `?.` everywhere to hide a null, or adding delays to hide a race, unless you label it clearly as a temporary mitigation.
+**Every fix you suggest must conform to `.claude/conventions.md`**, or it will fail review or CI.
+Read it rather than relying on memory — in particular §1 (boolean and test naming), §2 (Given/When/
+Then, the 20-line cap and how detekt counts it) and §3 (fakes over mocks, where fixtures live).
 
-Keep code snippets short and only where words aren't enough. Describe the change; don't write the full implementation.
+Two rules are easy to get backwards, so they are worth naming here:
+
+- **`has`, `can` and `should` are valid boolean prefixes**, alongside `is`. Do not suggest renaming
+  `hasItems` to `isHasItems`.
+- **The 20-line cap counts blank and comment lines, and the signature line.** Do not tell the user
+  they have room they do not have.
+
+Also:
+- Suggest a unit test for every fix in business logic — the gated set is `businessLogicIncludes`
+  (§4). A regression test that fails before the fix and passes after is worth more than one written
+  to raise a percentage.
+- The fix must pass `detektAll`. Don't suggest suppressing a rule unless you explain why, and never
+  suggest an added `coverageExclusions` entry to get a failing gate to pass (§4).
+- **Fix the cause, not the symptom.** Don't suggest catching and ignoring exceptions, scattering `?.`
+  to hide a null, or adding delays to hide a race, unless you label it clearly as a temporary
+  mitigation.
+- Never recommend an API without confirming it exists in the version this project pins (§5).
+
+Keep code snippets short and only where words aren't enough. Describe the change; don't write the
+full implementation.
 
 ## Security and personal data
 

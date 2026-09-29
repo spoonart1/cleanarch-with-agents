@@ -63,6 +63,11 @@ jobs:
       # Static analysis. Kept separate from lint for the same reason: a detekt
       # failure should name itself in the job summary.
       #
+      # This step and the coverage gate below are what mechanically enforce
+      # .claude/conventions.md — the canonical write-up of the project's
+      # conventions and the reasoning behind each one. If either fails, that
+      # file explains the rule and why it exists.
+      #
       # No --auto-correct here on purpose. The formatting rules can rewrite
       # sources, and a CI run that edits its own checkout to go green hides the
       # very diff a reviewer needs to see. Developers run
