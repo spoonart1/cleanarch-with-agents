@@ -60,6 +60,22 @@ jobs:
       - name: Lint
         run: ./gradlew lint --no-daemon
 
+      # Static analysis. Kept separate from lint for the same reason: a detekt
+      # failure should name itself in the job summary.
+      #
+      # No --auto-correct here on purpose. The formatting rules can rewrite
+      # sources, and a CI run that edits its own checkout to go green hides the
+      # very diff a reviewer needs to see. Developers run
+      # `./gradlew detektAll -PdetektAutoCorrect=true` locally instead.
+      - name: Detekt
+        run: ./gradlew detektAll --no-daemon
+
+      # The 90% coverage gate on business logic (use cases, repositories,
+      # ViewModels, the sync engine and the mappers). Runs after the unit tests
+      # above so it reuses their execution data.
+      - name: Coverage gate
+        run: ./gradlew jacocoCoverageVerificationAll --no-daemon
+
       - name: Upload test reports
         # Runs even when a previous step failed — the reports are most useful
         # exactly when something went wrong.
@@ -70,5 +86,7 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/reports/lint-results-*.html
+            **/build/reports/detekt/
+            **/build/reports/jacoco/
           retention-days: 7
           if-no-files-found: ignore

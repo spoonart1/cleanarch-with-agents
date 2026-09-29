@@ -75,7 +75,7 @@ class OfflineFirstChecklistRepositoryTest {
     fun tearDown() = database.close()
 
     @Test
-    fun `creating a checklist stores it as pending and queues an outbox entry`() = runTest {
+    fun `test createChecklist when called should store it pending and queue an outbox entry`() = runTest {
         val id = repository.createChecklist("Site survey")
 
         val stored = checklistDao.getChecklist(id)!!
@@ -90,14 +90,14 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `a write requests a sync`() = runTest {
+    fun `test createChecklist when the write succeeds should request a sync`() = runTest {
         repository.createChecklist("Site survey")
 
         assertEquals(1, scheduler.requestCount)
     }
 
     @Test
-    fun `the write is durable before the sync is requested`() = runTest {
+    fun `test createChecklist when a sync is requested should have already made the write durable`() = runTest {
         // The point of offline-first: the row exists whether or not the sync
         // ever runs. The recording scheduler never runs one.
         val id = repository.createChecklist("Site survey")
@@ -108,7 +108,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `renaming marks the checklist pending again and queues an update`() = runTest {
+    fun `test renameChecklist when called should mark it pending again and queue an update`() = runTest {
         val id = repository.createChecklist("Original")
         outboxDao.deleteByOperationId(outboxDao.pendingOperations().first().operationId)
         checklistDao.setChecklistSyncStatus(id, SyncStatus.SYNCED)
@@ -124,7 +124,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `deleting a checklist hides it but keeps the row until the server confirms`() = runTest {
+    fun `test deleteChecklist when called should hide the row but keep it until the server confirms`() = runTest {
         val id = repository.createChecklist("Doomed")
 
         repository.deleteChecklist(id)
@@ -145,7 +145,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `adding an item stores it pending and queues an entry`() = runTest {
+    fun `test addItem when called should store it pending and queue an outbox entry`() = runTest {
         val checklistId = repository.createChecklist("Survey")
 
         val itemId = repository.addItem(checklistId, "Check the gauge")
@@ -157,7 +157,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `ticking an item marks it pending`() = runTest {
+    fun `test setItemDone when an item is ticked should mark it pending`() = runTest {
         val checklistId = repository.createChecklist("Survey")
         val itemId = repository.addItem(checklistId, "Check the gauge")
         checklistDao.setItemSyncStatus(itemId, SyncStatus.SYNCED)
@@ -170,7 +170,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `adding a note keeps the item's other fields`() = runTest {
+    fun `test setItemNote when a note is added should keep the other fields`() = runTest {
         val checklistId = repository.createChecklist("Survey")
         val itemId = repository.addItem(checklistId, "Check the gauge")
         repository.setItemDone(itemId, isDone = true)
@@ -184,7 +184,7 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `observeItems returns only the requested checklist's items`() = runTest {
+    fun `test observeItems when other checklists have items should return only the requested ones`() = runTest {
         val first = repository.createChecklist("First")
         val second = repository.createChecklist("Second")
         repository.addItem(first, "Item A")
@@ -196,7 +196,70 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `editing a missing record does nothing rather than throwing`() = runTest {
+    fun `test observeChecklistSummaries when a checklist has items should report its counts`() =
+        runTest {
+            // Given a checklist with three items
+            val checklistId = repository.createChecklist("Survey")
+            val first = repository.addItem(checklistId, "Item A")
+            val second = repository.addItem(checklistId, "Item B")
+            repository.addItem(checklistId, "Item C")
+
+            // And two of them are done
+            repository.setItemDone(first, true)
+            repository.setItemDone(second, true)
+
+            // When
+            val summary = repository.observeChecklistSummaries().first().single()
+
+            // Then
+            assertEquals("Survey", summary.checklist.title)
+            assertEquals(3, summary.itemCount)
+            assertEquals(2, summary.doneCount)
+        }
+
+    @Test
+    fun `test observeChecklistSummaries when a checklist has no items should report zero counts`() =
+        runTest {
+            // Given a checklist with no items
+            repository.createChecklist("Empty")
+
+            // When
+            val summary = repository.observeChecklistSummaries().first().single()
+
+            // Then
+            assertEquals(0, summary.itemCount)
+            assertEquals(0, summary.doneCount)
+        }
+
+    @Test
+    fun `test observeItems when an item has every field set should map them all to the domain model`() =
+        runTest {
+            // Given a checklist with one item
+            val checklistId = repository.createChecklist("Survey")
+            val itemId = repository.addItem(checklistId, "Check the gauge")
+
+            // And that item has been ticked and annotated
+            repository.setItemDone(itemId, true)
+            repository.setItemNote(itemId, "Read 4.2 bar")
+
+            // When
+            val item = repository.observeItems(checklistId).first().single()
+
+            // Then every field survives the entity-to-domain mapping. Asserting
+            // the whole model rather than one field is deliberate: a mapper bug
+            // that drops a field is exactly what this guards against, and a test
+            // that checks only `text` would not catch it.
+            assertEquals(itemId, item.id)
+            assertEquals(checklistId, item.checklistId)
+            assertEquals("Check the gauge", item.text)
+            assertTrue(item.isDone)
+            assertEquals("Read 4.2 bar", item.note)
+            assertEquals(SyncStatus.PENDING, item.syncStatus)
+            assertNull("an unsynced item has no server id yet", item.serverId)
+        }
+
+    @Test
+    fun `test renameChecklist when the record is missing should do nothing rather than throw`() = runTest {
         repository.renameChecklist("does-not-exist", "New name")
         repository.setItemDone("does-not-exist", isDone = true)
 
@@ -205,14 +268,14 @@ class OfflineFirstChecklistRepositoryTest {
     }
 
     @Test
-    fun `requestSync asks for an immediate sync`() {
+    fun `test requestSync when called should ask for an immediate sync`() {
         repository.requestSync()
 
         assertEquals(1, scheduler.syncNowCount)
     }
 
     @Test
-    fun `each queued operation gets a distinct id so retries stay idempotent`() = runTest {
+    fun `test createChecklist when called repeatedly should give each operation a distinct id`() = runTest {
         val id = repository.createChecklist("Survey")
         repository.renameChecklist(id, "Renamed")
 

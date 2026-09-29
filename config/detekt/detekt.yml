@@ -1,0 +1,246 @@
+# Detekt configuration for this project.
+#
+# This file is NOT a copy of detekt's 797-line default config. `buildUponDefaultConfig`
+# is set to true in the convention plugin, so everything here is an override layered
+# on top of the defaults — which keeps the diff readable and means a detekt upgrade
+# brings new rules with it instead of freezing them at today's set.
+#
+# Where a value differs from the default, the comment says why.
+
+build:
+  # 0 = any finding fails the build. The project is clean, so there is no reason
+  # to allow a budget of accepted problems.
+  maxIssues: 0
+
+config:
+  # Fail loudly if a future detekt release renames or removes a property used
+  # below, rather than silently ignoring the setting.
+  validation: true
+  warningsAsErrors: false
+
+complexity:
+  LongMethod:
+    # The house rule: a function over 20 lines should be broken up. Composables
+    # are excluded because a declarative UI tree is one expression that does not
+    # decompose along the same lines as procedural code — splitting it to satisfy
+    # a line count usually makes it harder to read, not easier.
+    active: true
+    threshold: 20
+    ignoreAnnotated:
+      - 'Composable'
+      - 'Preview'
+    # Test sources are exempt. A test written as Given / When / And / Then with
+    # a realistic fixture is routinely over 20 lines, and splitting it into
+    # helpers moves the setup away from the assertion it explains — which is
+    # the opposite of what the structure convention is for.
+    excludes: ['**/test/**', '**/androidTest/**']
+  LongParameterList:
+    # Composables legitimately take many parameters: state plus one lambda per
+    # event is the pattern this project's code conventions ask for.
+    #
+    # Test data builders are excluded for the same reason in reverse: a builder
+    # with a default for every field is what lets a test name the two values it
+    # cares about and ignore the rest. Collapsing it into a parameter object
+    # would make every call site noisier.
+    excludes: ['**/test/**', '**/androidTest/**', '**/TestData.kt']
+    ignoreAnnotated:
+      - 'Composable'
+      - 'Preview'
+    ignoreDefaultParameters: true
+  TooManyFunctions:
+    # DAOs and repository interfaces are legitimately wide; they are a list of
+    # operations, not a class doing too much. A test class is too: one function
+    # per behaviour is the goal, and capping it would push authors to combine
+    # unrelated assertions into a single test.
+    excludes: ['**/*Dao.kt', '**/*Repository.kt', '**/*Api.kt', '**/test/**', '**/androidTest/**']
+    thresholdInClasses: 20
+
+coroutines:
+  SuspendFunSwallowedCancellation:
+    # Off by default upstream; on here because it is CLAUDE.md rule 4 — a bare
+    # catch around a suspending call breaks structured concurrency. This is the
+    # single most valuable rule in this file for an offline-first app.
+    active: true
+  InjectDispatcher:
+    # Dispatchers must be injected so tests can substitute a test dispatcher,
+    # not hardcoded at the call site.
+    active: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    # Deliberately NOT catching `Exception`, only the harder cases.
+    #
+    # This project's ViewModels and sync engine do
+    #     catch (e: CancellationException) { throw e }
+    #     catch (e: Exception) { ...turn into a user message... }
+    # which is the correct shape at an application boundary: the coroutine
+    # contract is honoured by the first clause, and the second stops one failed
+    # write from killing the screen. Detekt cannot see the rethrow guard above,
+    # so listing `Exception` here would flag five correct call sites and teach
+    # the reader to suppress the rule.
+    #
+    # What remains listed is genuinely wrong to catch: `Throwable` and `Error`
+    # swallow OutOfMemoryError and friends, and the null/index exceptions
+    # indicate a bug to fix rather than a condition to handle.
+    active: true
+    exceptionNames:
+      - 'ArrayIndexOutOfBoundsException'
+      - 'Error'
+      - 'IndexOutOfBoundsException'
+      - 'NullPointerException'
+      - 'Throwable'
+  SwallowedException:
+    # The CancellationException rethrow clause reads as a "swallow" to this
+    # rule — the exception is used as the throw target, not logged. Same
+    # reasoning as above: the pattern it flags here is the correct one.
+    active: true
+    ignoredExceptionTypes:
+      - 'CancellationException'
+      - 'InterruptedException'
+      - 'NumberFormatException'
+      - 'ParseException'
+
+naming:
+  BooleanPropertyNaming:
+    # Detekt's own boolean rule. It needs type resolution, so it catches
+    # inferred types (`val done = true`) that the custom cleanarch rule cannot,
+    # while the custom rule covers the non-type-resolution run. The two overlap
+    # deliberately rather than duplicating: neither alone covers both cases.
+    active: true
+    allowedPattern: '^(is|has|are|can|should|was|were|will|does|did)'
+  FunctionNaming:
+    # Backticked test names contain spaces, which the default pattern rejects.
+    # The custom TestFunctionNaming rule governs those names instead.
+    excludes: ['**/test/**', '**/androidTest/**']
+    # Composables are PascalCase by convention; they name a UI element, not an action.
+    ignoreAnnotated:
+      - 'Composable'
+      - 'Preview'
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Z0-9]*'
+  MatchingDeclarationName:
+    # A file holding one Composable plus its stateless twin and a preview is a
+    # normal, readable unit in this project.
+    active: true
+
+style:
+  MagicNumber:
+    # Tests and previews are full of deliberate literal values; that is the point
+    # of a fixture. Enforcing named constants there adds noise, not clarity.
+    excludes: ['**/test/**', '**/androidTest/**']
+    ignoreAnnotated:
+      - 'Preview'
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  MaxLineLength:
+    # Matches the 100-column width the existing sources and comments already use.
+    maxLineLength: 100
+    excludeCommentStatements: false
+    # Test sources are exempt because the required name format
+    # ('test <fn> when <clause> should <result>') is itself long: a descriptive
+    # name on an indented function routinely passes 100 characters, and
+    # wrapping a backticked function name is not possible. The convention that
+    # a failure explains itself is worth more here than the column limit.
+    excludes: ['**/test/**', '**/androidTest/**']
+  ReturnCount:
+    # Guard clauses at the top of a function are preferred here over nesting.
+    max: 3
+    excludeGuardClauses: true
+  UnusedPrivateMember:
+    # @Preview functions are private and never called from Kotlin — the IDE and
+    # the Compose tooling invoke them reflectively. They are the one legitimate
+    # case of a private function with no call site, and the code conventions in
+    # CLAUDE.md actively require them on stateless composables.
+    active: true
+    ignoreAnnotated:
+      - 'Preview'
+      - 'PreviewLightDark'
+      - 'PreviewScreenSizes'
+      - 'Composable'
+  ForbiddenComment:
+    # A template repository should not ship TODOs; they read as unfinished work
+    # to someone cloning it.
+    active: true
+    comments:
+      - reason: 'Unresolved work should be an issue, not a comment in a template.'
+        value: 'TODO:'
+      - reason: 'Unresolved work should be an issue, not a comment in a template.'
+        value: 'FIXME:'
+  MandatoryBracesLoops:
+    active: true
+
+# --- ktlint-backed formatting rules ------------------------------------------
+# Supplied by detekt-formatting (added to `detektPlugins` in the convention
+# plugin). These are autocorrectable with `./gradlew detekt --auto-correct`.
+formatting:
+  active: true
+  MaximumLineLength:
+    # The ktlint counterpart of style>MaxLineLength above; both exist and both
+    # have to be told about the test-name exemption, or long test names fail
+    # this one instead.
+    active: true
+    maxLineLength: 100
+    excludes: ['**/test/**', '**/androidTest/**']
+  ImportOrdering:
+    # Disabled deliberately.
+    #
+    # This rule and its own --auto-correct disagree here: the fix moves
+    # `javax.inject.Singleton` below the `kotlinx.*` imports (the IntelliJ
+    # layout), and the check then reports that same result as wrong, because
+    # without an .editorconfig it wants plain lexicographic order. Running
+    # auto-correct twice does not converge.
+    #
+    # Rather than add an .editorconfig purely to referee a cosmetic rule, this
+    # one is off: import order is maintained by the IDE's optimise-imports for
+    # everyone who touches the file, and nothing about correctness rides on it.
+    active: false
+  ArgumentListWrapping:
+    # Off for Compose sources. ktlint wants every argument on its own line once
+    # a call wraps, which turns a compact trailing-lambda slot such as
+    #     supportingContent = note?.let { { Text(it) } }
+    # into four lines that say no more than one did.
+    active: true
+    excludes: ['**/*Screen.kt', '**/*Screen*.kt', '**/designsystem/**']
+  Indentation:
+    # Same reasoning. ktlint's continuation-indent model disagrees with the
+    # hanging indent used for wrapped string concatenations in this codebase,
+    # and its "fix" de-indents the continuation so it lines up with the
+    # assignment rather than under it — harder to read, not easier.
+    active: false
+  NoUnusedImports:
+    active: true
+  Wrapping:
+    # Excluded for Compose sources for the same reason as ArgumentListWrapping:
+    # it wants a newline after the `{` of a trailing-lambda slot such as
+    #     supportingContent = note?.let { { Text(it) } }
+    # which is a single expression that reads better on one line.
+    active: true
+    excludes: ['**/*Screen.kt', '**/*Screen*.kt', '**/designsystem/**']
+
+# --- This project's own rules ------------------------------------------------
+# Provided by build-logic/detekt-rules and registered through
+# META-INF/services. The rule set id 'cleanarch' comes from
+# CleanArchRuleSetProvider.
+cleanarch:
+  active: true
+  TestFunctionNaming:
+    # Applies only to test sources, which is where @Test functions live.
+    active: true
+    includes: ['**/test/**', '**/androidTest/**']
+    testAnnotations:
+      - 'Test'
+      - 'ParameterizedTest'
+      - 'RepeatedTest'
+  BooleanPropertyNaming:
+    active: true
+    allowedPrefixes:
+      - 'is'
+      - 'has'
+      - 'can'
+      - 'should'
+      - 'are'
+      - 'was'
+      - 'were'
+      - 'will'
+      - 'does'
+      - 'did'

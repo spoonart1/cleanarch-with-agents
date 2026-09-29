@@ -33,6 +33,11 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":app")
 
+// Custom detekt rules. This lives in the main build rather than build-logic
+// because detekt loads rule sets from the `detektPlugins` configuration at its
+// own runtime — a module in an included build cannot be named there.
+include(":tools:detekt-rules")
+
 // Core modules, in dependency order (model has no dependencies at all).
 include(":core:model")
 include(":core:common")

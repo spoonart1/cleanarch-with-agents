@@ -26,6 +26,7 @@ dependencies {
     compileOnly(libs.ksp.gradle.plugin)
     compileOnly(libs.hilt.gradle.plugin)
     compileOnly(libs.room.gradle.plugin)
+    compileOnly(libs.detekt.gradle.plugin)
 }
 
 gradlePlugin {
@@ -57,6 +58,14 @@ gradlePlugin {
         register("jvmLibrary") {
             id = "cleanarch.jvm.library"
             implementationClass = "JvmLibraryConventionPlugin"
+        }
+        register("detekt") {
+            id = "cleanarch.detekt"
+            implementationClass = "DetektConventionPlugin"
+        }
+        register("jacoco") {
+            id = "cleanarch.jacoco"
+            implementationClass = "JacocoConventionPlugin"
         }
     }
 }

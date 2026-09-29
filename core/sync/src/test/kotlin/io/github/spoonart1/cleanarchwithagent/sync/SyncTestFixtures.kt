@@ -1,6 +1,7 @@
 package io.github.spoonart1.cleanarchwithagent.sync
 
 import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistEntity
+import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistItemEntity
 import io.github.spoonart1.cleanarchwithagent.database.entity.OutboxEntity
 import io.github.spoonart1.cleanarchwithagent.model.OutboxEntityType
 import io.github.spoonart1.cleanarchwithagent.model.OutboxOperationType
@@ -93,6 +94,26 @@ internal fun checklistEntity(
     id = id,
     serverId = serverId,
     title = title,
+    updatedAt = updatedAt,
+    syncStatus = syncStatus,
+)
+
+internal fun itemEntity(
+    id: String,
+    checklistId: String,
+    text: String = "Item",
+    serverId: String? = null,
+    isDone: Boolean = false,
+    note: String? = null,
+    updatedAt: Long = 1_000L,
+    syncStatus: SyncStatus = SyncStatus.PENDING,
+) = ChecklistItemEntity(
+    id = id,
+    serverId = serverId,
+    checklistId = checklistId,
+    text = text,
+    isDone = isDone,
+    note = note,
     updatedAt = updatedAt,
     syncStatus = syncStatus,
 )

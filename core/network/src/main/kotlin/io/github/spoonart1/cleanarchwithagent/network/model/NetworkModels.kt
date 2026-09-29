@@ -15,7 +15,7 @@ data class NetworkChecklist(
     @SerialName("id") val id: String,
     @SerialName("title") val title: String,
     @SerialName("updated_at") val updatedAt: Long,
-    @SerialName("deleted") val deleted: Boolean = false,
+    @SerialName("deleted") val isDeleted: Boolean = false,
 )
 
 @Serializable
@@ -26,7 +26,7 @@ data class NetworkChecklistItem(
     @SerialName("done") val isDone: Boolean = false,
     @SerialName("note") val note: String? = null,
     @SerialName("updated_at") val updatedAt: Long,
-    @SerialName("deleted") val deleted: Boolean = false,
+    @SerialName("deleted") val isDeleted: Boolean = false,
 )
 
 /**

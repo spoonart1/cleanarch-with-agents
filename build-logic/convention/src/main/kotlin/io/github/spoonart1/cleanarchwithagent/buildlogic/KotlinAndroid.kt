@@ -9,9 +9,16 @@ import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.getByType
 
-/** The shared version catalog, so convention plugins never hardcode a version. */
+/**
+ * The shared version catalog, so convention plugins never hardcode a version.
+ *
+ * Resolved from the root project rather than from `this`. When a plugin is
+ * applied inside the root build file's `subprojects { }` block, the subproject
+ * has not been evaluated yet and does not carry the catalog extension — only
+ * the root reliably does, at any point after settings evaluation.
+ */
 val Project.libs: VersionCatalog
-    get() = extensions.getByType<VersionCatalogsExtension>().named("libs")
+    get() = rootProject.extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 /** Look up a library by its catalog alias, e.g. `library("hilt-android")`. */
 internal fun Project.library(alias: String): Provider<MinimalExternalModuleDependency> =

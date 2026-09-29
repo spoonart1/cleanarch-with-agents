@@ -10,7 +10,7 @@ import org.junit.Test
 class NetworkSimulatorTest {
 
     @Test
-    fun `normal mode succeeds`() = runTest {
+    fun `test simulate when the mode is normal should succeed`() = runTest {
         val simulator = NetworkSimulator()
 
         val result = runCatching { simulator.simulate() }
@@ -19,7 +19,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `offline mode always fails`() = runTest {
+    fun `test simulate when the mode is offline should always fail`() = runTest {
         val simulator = NetworkSimulator().apply { setMode(NetworkMode.OFFLINE) }
 
         repeat(10) {
@@ -30,7 +30,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `slow mode succeeds but takes longer than normal`() = runTest {
+    fun `test simulate when the mode is slow should succeed but take longer`() = runTest {
         // runTest virtualises delay: testScheduler.currentTime advances by the
         // simulated amount without the test actually sleeping.
         val normalStart = testScheduler.currentTime
@@ -48,7 +48,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `flaky mode fails when the rate is one`() = runTest {
+    fun `test simulate when the flaky rate is one should always fail`() = runTest {
         val simulator = NetworkSimulator().apply {
             setMode(NetworkMode.FLAKY)
             setFailureRate(1f)
@@ -61,7 +61,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `a flaky rate of zero never fails`() = runTest {
+    fun `test simulate when the flaky rate is zero should never fail`() = runTest {
         val simulator = NetworkSimulator().apply {
             setMode(NetworkMode.FLAKY)
             setFailureRate(0f)
@@ -74,7 +74,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `flaky mode with a seeded random fails about half the time at rate one half`() = runTest {
+    fun `test simulate when the flaky rate is one half should fail about half the time`() = runTest {
         val simulator = NetworkSimulator().apply {
             setMode(NetworkMode.FLAKY)
             setFailureRate(0.5f)
@@ -89,7 +89,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `failure rate is clamped to a valid probability`() {
+    fun `test failureRate when set outside zero to one should clamp to a valid probability`() {
         val simulator = NetworkSimulator()
 
         simulator.setFailureRate(5f)
@@ -100,7 +100,7 @@ class NetworkSimulatorTest {
     }
 
     @Test
-    fun `mode changes are observable`() {
+    fun `test mode when it changes should be observable`() {
         val simulator = NetworkSimulator()
         assertEquals(NetworkMode.NORMAL, simulator.mode.value)
 

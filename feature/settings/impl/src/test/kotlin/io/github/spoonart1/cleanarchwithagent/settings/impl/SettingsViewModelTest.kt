@@ -22,23 +22,29 @@ class SettingsViewModelTest {
     private val simulator = NetworkSimulator()
 
     @Test
-    fun `starts in normal network mode`() = runTest {
+    fun `test uiState when newly constructed should start in normal network mode`() = runTest {
+        // Given
         val viewModel = SettingsViewModel(repository, simulator)
 
+        // When
         viewModel.uiState.test {
+            // Then
             assertEquals(NetworkMode.NORMAL, awaitItem().networkMode)
         }
     }
 
     @Test
-    fun `switching to offline is reflected in the state and the simulator`() = runTest {
+    fun `test setNetworkMode when switched to offline should update state and simulator`() = runTest {
+        // Given
         val viewModel = SettingsViewModel(repository, simulator)
 
         viewModel.uiState.test {
             skipItems(1)
 
+            // When
             viewModel.setNetworkMode(NetworkMode.OFFLINE)
 
+            // Then
             assertEquals(NetworkMode.OFFLINE, awaitItem().networkMode)
             assertEquals(
                 "the simulator itself must change, not just the UI",
@@ -49,10 +55,14 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `the pending count comes from the sync state`() = runTest {
+    fun `test uiState when sync state has pending work should expose the pending count`() = runTest {
+        // Given
         repository.setSyncState(SyncState.Idle(pendingCount = 7))
+
+        // When
         val viewModel = SettingsViewModel(repository, simulator)
 
+        // Then
         viewModel.uiState.test {
             skipItems(1)
             assertEquals(7, awaitItem().pendingCount)
@@ -60,34 +70,46 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `isSyncing is true only while a sync is running`() = runTest {
+    fun `test uiState when a sync starts and finishes should flip isSyncing`() = runTest {
+        // Given
         repository.setSyncState(SyncState.Syncing(pendingCount = 1))
         val viewModel = SettingsViewModel(repository, simulator)
 
         viewModel.uiState.test {
             skipItems(1)
+
+            // When
             assertTrue(awaitItem().isSyncing)
 
+            // And
             repository.setSyncState(SyncState.Idle(pendingCount = 0))
 
+            // Then
             assertFalse(awaitItem().isSyncing)
         }
     }
 
     @Test
-    fun `sync now asks the repository to sync`() = runTest {
+    fun `test syncNow when called should ask the repository to sync`() = runTest {
+        // Given
         val viewModel = SettingsViewModel(repository, simulator)
 
+        // When
         viewModel.syncNow()
 
+        // Then
         assertEquals(1, repository.syncRequestCount)
     }
 
     @Test
-    fun `an error sync state is carried through`() = runTest {
+    fun `test uiState when the sync state is an error should carry it through`() = runTest {
+        // Given
         repository.setSyncState(SyncState.Error(message = "offline", pendingCount = 2))
+
+        // When
         val viewModel = SettingsViewModel(repository, simulator)
 
+        // Then
         viewModel.uiState.test {
             skipItems(1)
             val state = awaitItem()

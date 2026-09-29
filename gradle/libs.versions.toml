@@ -63,6 +63,13 @@ kotlinxSerialization = "1.11.0"
 # unrelated release lines.
 coroutines = "1.11.0"
 
+# --- Static analysis / coverage ----------------------------------------------
+# 1.23.8 is the newest release; there is no detekt 2.x. It embeds Kotlin
+# 2.0.21's compiler for parsing, which is older than this project's 2.4.20 —
+# see the note in DetektConventionPlugin before enabling type resolution.
+detekt = "1.23.8"
+jacoco = "0.8.13"
+
 # --- Test --------------------------------------------------------------------
 junit = "4.13.2"
 androidxTestJunit = "1.3.0"
@@ -136,6 +143,14 @@ androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espres
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
+# --- Detekt custom rules -----------------------------------------------------
+# detekt-api is what a custom RuleSetProvider compiles against; detekt-test
+# gives the custom rules their own unit tests. detekt-formatting is the
+# ktlint-backed wrapper, loaded at runtime via the detektPlugins configuration.
+detekt-api = { group = "io.gitlab.arturbosch.detekt", name = "detekt-api", version.ref = "detekt" }
+detekt-test = { group = "io.gitlab.arturbosch.detekt", name = "detekt-test", version.ref = "detekt" }
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
+
 # --- Dependencies of build-logic ---------------------------------------------
 # Referenced from build-logic's own build file so plugin classpath versions stay
 # in this catalog rather than being hardcoded there.
@@ -145,6 +160,7 @@ compose-compiler-gradle-plugin = { group = "org.jetbrains.kotlin", name = "compo
 ksp-gradle-plugin = { group = "com.google.devtools.ksp", name = "com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 hilt-gradle-plugin = { group = "com.google.dagger", name = "hilt-android-gradle-plugin", version.ref = "hilt" }
 room-gradle-plugin = { group = "androidx.room", name = "room-gradle-plugin", version.ref = "room" }
+detekt-gradle-plugin = { group = "io.gitlab.arturbosch.detekt", name = "detekt-gradle-plugin", version.ref = "detekt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -156,3 +172,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 room = { id = "androidx.room", version.ref = "room" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

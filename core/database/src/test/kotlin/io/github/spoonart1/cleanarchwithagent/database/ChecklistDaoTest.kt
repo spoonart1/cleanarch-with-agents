@@ -43,7 +43,7 @@ class ChecklistDaoTest {
     fun tearDown() = database.close()
 
     @Test
-    fun `observeChecklists emits inserted checklists newest first`() = runTest {
+    fun `test observeChecklists when rows are inserted should emit them newest first`() = runTest {
         checklistDao.upsertChecklist(checklist(id = "1", title = "Older", updatedAt = 100))
         checklistDao.upsertChecklist(checklist(id = "2", title = "Newer", updatedAt = 200))
 
@@ -53,7 +53,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `observeChecklists hides soft-deleted rows`() = runTest {
+    fun `test observeChecklists when a row is soft deleted should hide it`() = runTest {
         checklistDao.upsertChecklist(checklist(id = "1", title = "Visible"))
         checklistDao.upsertChecklist(
             checklist(id = "2", title = "Gone").copy(isDeleted = true),
@@ -65,7 +65,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `upsertChecklistWithOutbox writes the row and the outbox entry together`() = runTest {
+    fun `test upsertChecklistWithOutbox when called should write the row and outbox entry together`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklist = checklist(id = "1", title = "Site survey"),
             operation = outbox(operationId = "op-1", entityId = "1"),
@@ -77,7 +77,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `a failed transaction writes neither the row nor the outbox entry`() = runTest {
+    fun `test upsertChecklistWithOutbox when the transaction fails should write neither`() = runTest {
         // A foreign-key violation: the item references a checklist that does not
         // exist, so the insert fails. The outbox entry queued alongside it in the
         // same transaction must roll back too -- otherwise the app would try to
@@ -111,7 +111,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `soft deleting a checklist also marks its items deleted`() = runTest {
+    fun `test softDeleteChecklist when called should also mark its items deleted`() = runTest {
         checklistDao.upsertChecklist(checklist(id = "c1", title = "Survey"))
         checklistDao.upsertItem(item(id = "i1", checklistId = "c1"))
         checklistDao.upsertItem(item(id = "i2", checklistId = "c1"))
@@ -132,7 +132,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `deleting a checklist cascades to its items`() = runTest {
+    fun `test deleteChecklist when called should cascade to its items`() = runTest {
         checklistDao.upsertChecklist(checklist(id = "c1", title = "Survey"))
         checklistDao.upsertItem(item(id = "i1", checklistId = "c1"))
 
@@ -142,7 +142,7 @@ class ChecklistDaoTest {
     }
 
     @Test
-    fun `lookup by server id finds a synced row`() = runTest {
+    fun `test checklistByServerId when the row is synced should find it`() = runTest {
         checklistDao.upsertChecklist(
             checklist(id = "local-1", title = "Survey").copy(
                 serverId = "remote-1",

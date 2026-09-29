@@ -21,24 +21,31 @@ class ChecklistListViewModelTest {
     private val repository = FakeChecklistRepository()
 
     @Test
-    fun `starts in loading and then emits content`() = runTest {
+    fun `test uiState when first collected should emit loading then content`() = runTest {
+        // Given
         val viewModel = ChecklistListViewModel(repository)
 
+        // When
         viewModel.uiState.test {
+            // Then
             assertEquals(ChecklistListUiState.Loading, awaitItem())
             assertTrue(awaitItem() is ChecklistListUiState.Content)
         }
     }
 
     @Test
-    fun `content carries each checklist's item counts`() = runTest {
+    fun `test uiState when a checklist has items should expose its item and done counts`() = runTest {
+        // Given
         repository.setChecklists(testChecklist(id = "c1", title = "Site survey"))
         repository.setItems(
             testChecklistItem(id = "i1", checklistId = "c1", isDone = true),
             testChecklistItem(id = "i2", checklistId = "c1", isDone = false),
         )
+
+        // When
         val viewModel = ChecklistListViewModel(repository)
 
+        // Then
         viewModel.uiState.test {
             skipItems(1) // Loading
             val content = awaitItem() as ChecklistListUiState.Content
@@ -51,12 +58,16 @@ class ChecklistListViewModelTest {
     }
 
     @Test
-    fun `content exposes the sync status of each checklist`() = runTest {
+    fun `test uiState when a checklist is pending should expose its sync status`() = runTest {
+        // Given
         repository.setChecklists(
             testChecklist(id = "c1", syncStatus = SyncStatus.PENDING),
         )
+
+        // When
         val viewModel = ChecklistListViewModel(repository)
 
+        // Then
         viewModel.uiState.test {
             skipItems(1)
             val content = awaitItem() as ChecklistListUiState.Content
@@ -66,10 +77,14 @@ class ChecklistListViewModelTest {
     }
 
     @Test
-    fun `content carries the global sync state`() = runTest {
+    fun `test uiState when a sync is running should carry the global sync state`() = runTest {
+        // Given
         repository.setSyncState(SyncState.Syncing(pendingCount = 4))
+
+        // When
         val viewModel = ChecklistListViewModel(repository)
 
+        // Then
         viewModel.uiState.test {
             skipItems(1)
             val content = awaitItem() as ChecklistListUiState.Content
@@ -79,75 +94,95 @@ class ChecklistListViewModelTest {
     }
 
     @Test
-    fun `creating a checklist adds it to the list`() = runTest {
+    fun `test createChecklist when given a title should add it to the list`() = runTest {
+        // Given
         val viewModel = ChecklistListViewModel(repository)
 
         viewModel.uiState.test {
             skipItems(2) // Loading, then the initial empty Content
 
+            // When
             viewModel.createChecklist("New checklist")
 
+            // Then
             val content = awaitItem() as ChecklistListUiState.Content
             assertEquals(listOf("New checklist"), content.checklists.map { it.title })
         }
     }
 
     @Test
-    fun `a blank title is ignored rather than creating an unnamed checklist`() = runTest {
+    fun `test createChecklist when the title is blank should not create anything`() = runTest {
+        // Given
         val viewModel = ChecklistListViewModel(repository)
 
+        // When
         viewModel.createChecklist("   ")
 
+        // Then
         assertEquals(0, repository.syncRequestCount)
     }
 
     @Test
-    fun `a title is trimmed before it is stored`() = runTest {
+    fun `test createChecklist when the title has padding should trim it before storing`() = runTest {
+        // Given
         val viewModel = ChecklistListViewModel(repository)
 
         viewModel.uiState.test {
             skipItems(2)
 
+            // When
             viewModel.createChecklist("  Padded  ")
 
+            // Then
             val content = awaitItem() as ChecklistListUiState.Content
             assertEquals("Padded", content.checklists.first().title)
         }
     }
 
     @Test
-    fun `a failed write surfaces a message and leaves the list intact`() = runTest {
+    fun `test createChecklist when the write fails should surface a user message`() = runTest {
+        // Given
         repository.setChecklists(testChecklist(id = "c1", title = "Existing"))
         val viewModel = ChecklistListViewModel(repository)
+
+        // And the next write is set up to fail
         repository.failWith = IllegalStateException("database is full")
 
         viewModel.userMessage.test {
             assertEquals(null, awaitItem())
 
+            // When
             viewModel.createChecklist("Doomed")
 
+            // Then
             assertEquals("database is full", awaitItem())
         }
     }
 
     @Test
-    fun `dismissing the message clears it`() = runTest {
+    fun `test onUserMessageShown when a message is showing should clear it`() = runTest {
+        // Given
         val viewModel = ChecklistListViewModel(repository)
         repository.failWith = IllegalStateException("nope")
 
         viewModel.userMessage.test {
             skipItems(1)
+
+            // And a message is showing
             viewModel.createChecklist("Doomed")
             assertEquals("nope", awaitItem())
 
+            // When
             viewModel.onUserMessageShown()
 
+            // Then
             assertEquals(null, awaitItem())
         }
     }
 
     @Test
-    fun `deleting a checklist removes it from the list`() = runTest {
+    fun `test deleteChecklist when given an id should remove it from the list`() = runTest {
+        // Given
         repository.setChecklists(
             testChecklist(id = "c1", title = "Keep"),
             testChecklist(id = "c2", title = "Remove"),
@@ -157,8 +192,10 @@ class ChecklistListViewModelTest {
         viewModel.uiState.test {
             skipItems(2)
 
+            // When
             viewModel.deleteChecklist("c2")
 
+            // Then
             val content = awaitItem() as ChecklistListUiState.Content
             assertEquals(listOf("Keep"), content.checklists.map { it.title })
         }

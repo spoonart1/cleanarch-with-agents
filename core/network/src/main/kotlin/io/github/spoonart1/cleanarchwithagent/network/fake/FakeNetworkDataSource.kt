@@ -7,11 +7,11 @@ import io.github.spoonart1.cleanarchwithagent.network.model.NetworkChecklistItem
 import io.github.spoonart1.cleanarchwithagent.network.model.PushRequest
 import io.github.spoonart1.cleanarchwithagent.network.model.PushResponse
 import io.github.spoonart1.cleanarchwithagent.network.model.SyncResponse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * An in-memory stand-in for the server, and the default for this template.
@@ -89,7 +89,7 @@ class FakeNetworkDataSource @Inject constructor(
         checklists[serverId] = incoming.copy(
             id = serverId,
             updatedAt = now,
-            deleted = request.operation == OPERATION_DELETE,
+            isDeleted = request.operation == OPERATION_DELETE,
         )
 
         return PushResponse(
@@ -110,7 +110,7 @@ class FakeNetworkDataSource @Inject constructor(
         items[serverId] = incoming.copy(
             id = serverId,
             updatedAt = now,
-            deleted = request.operation == OPERATION_DELETE,
+            isDeleted = request.operation == OPERATION_DELETE,
         )
 
         return PushResponse(

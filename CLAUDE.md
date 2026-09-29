@@ -41,6 +41,10 @@ maintainer confirmation before the next phase begins.**
 ```bash
 ./gradlew build                  # assembles debug+release, runs lint. The main gate.
 ./gradlew test                   # all JVM unit tests
+./gradlew detektAll              # static analysis, every module
+./gradlew detektAll -PdetektAutoCorrect=true   # same, fixing formatting in place
+./gradlew jacocoTestReportAll            # coverage reports (HTML + XML)
+./gradlew jacocoCoverageVerificationAll  # the 90% business-logic gate
 ./gradlew :core:database:test    # one module
 ./gradlew :core:sync:test --tests "*OutboxTest*"          # one class
 ./gradlew :core:sync:test --tests "*OutboxTest.replays*"  # one method
@@ -114,6 +118,47 @@ These are the point of the template. Violating one silently defeats its purpose:
 
 ### Code conventions
 
+These are enforced by detekt (`./gradlew detektAll`), not just documented. The configuration is
+`config/detekt/detekt.yml`, which layers over detekt's defaults rather than replacing them, and every
+deviation in it carries a comment explaining why.
+
+**Naming**
+
+- **Booleans read as a question**: `isLoading`, `hasItems`, `canRetry` — never a bare noun like
+  `loading`. Enforced by the custom `cleanarch:BooleanPropertyNaming` rule for declared types, and by
+  detekt's own `naming:BooleanPropertyNaming` for inferred ones. A wire model keeps its server field
+  name via `@SerialName("deleted") val isDeleted: Boolean`.
+- **Test names read as a sentence**: `test <function> when <clause> should <result>`, backticked. For
+  example ``fun `test getName when success should return true`()``. Enforced by the custom
+  `cleanarch:TestFunctionNaming` rule. The point is that a CI failure says what broke without anyone
+  opening the file.
+
+**Structure**
+
+- **Test bodies are Given / When / And / Then**, marked with those comments in that order. `// And`
+  is optional and marks a second setup step or a second action. This is a convention, not a detekt
+  rule — a rule for it produces false positives on every table-driven or Turbine-based test.
+- **Functions stay under 20 lines.** Enforced by `complexity:LongMethod`. `@Composable` and
+  `@Preview` are exempt: a declarative UI tree is one expression, and splitting it to satisfy a line
+  count makes it harder to read. Test sources are exempt too, since Given/When/Then with a realistic
+  fixture routinely runs longer and extracting the setup moves it away from the assertion it explains.
+
+**Coverage**
+
+- Business logic is gated at **90% line coverage**: use cases, repositories, ViewModels, mappers, the
+  sync engine, and anything else matching `businessLogicIncludes` in
+  `build-logic/convention/src/main/kotlin/io/github/spoonart1/cleanarchwithagent/buildlogic/Jacoco.kt`.
+- The report (`jacocoTestReportAll`) covers the whole module so the number is informative; the gate
+  (`jacocoCoverageVerificationAll`) measures only that business-logic subset so it stays meaningful.
+  Gating on Compose UI would measure rendering rather than correctness, and a gate people learn to
+  ignore is worse than none.
+- Excluded from both: generated code (Hilt, Room, serialization), Compose screens and previews, and
+  thin framework adapters such as `RetrofitNetworkDataSource` and `WorkManagerSyncScheduler` that
+  contain no decision of our own. **Exclusions are for code with no logic, never for code that is
+  merely hard to test** — if a class is hard to test and has logic, that is a design signal.
+
+**Composables and state**
+
 - Split composables into a stateful wrapper that reads the ViewModel and a stateless one that takes
   state plus lambdas. Only the stateless one is previewable and cheap to test; give it a `@Preview`.
 - ViewModels expose one immutable UI state as a `StateFlow`; screens render it and emit events up.
@@ -178,6 +223,42 @@ Module build files should be a few lines. If one grows, the logic belongs in a c
 | `cleanarch.android.hilt` | modules using DI |
 | `cleanarch.android.room` | `core:database` only |
 | `cleanarch.jvm.library` | `core:model` only |
+| `cleanarch.detekt` | applied to every module from the root build file |
+| `cleanarch.jacoco` | applied to every module from the root build file |
+
+The last two are applied in `subprojects { }` in the root `build.gradle.kts` rather than per module,
+so a new module is covered the day it is created. Three things there are non-obvious:
+
+- **The root script must declare them in its own `plugins { }` block** (with `apply false`) before
+  `subprojects { }` can apply them by id. A convention plugin from an included build is otherwise not
+  on the root script's classpath.
+- **`Project.libs` resolves the catalog from `rootProject`.** Applied inside `subprojects { }`, a
+  subproject has not been evaluated yet and does not carry the `VersionCatalogsExtension`.
+- **Custom detekt rules live in `tools/detekt-rules`, in the main build — not in `build-logic`.**
+  Detekt resolves rule sets through the `detektPlugins` configuration at its own runtime, and a
+  project inside an included build cannot be named there.
+
+### Detekt and JaCoCo on AGP 9
+
+Both needed empirical fixes that contradict the guides online:
+
+- **JaCoCo's class directory is not `tmp/kotlin-classes/debug`.** Under built-in Kotlin, AGP 9 writes
+  to `intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes`. Using the AGP 8 path produces
+  a report containing zero classes — a green build that measured nothing, which is worse than a red
+  one. Verified by inspecting the build directory.
+- **Synthetic classes must be excluded from the coverage gate.** The rule scores per `CLASS`, and
+  Kotlin emits one class per suspend function and lambda (`SyncEngine$push$1`). Those carry a state
+  machine, not author-written branches, and cannot be covered independently — left in, they produce a
+  page of 0.00 violations for functions whose tests pass.
+- **Detekt 1.23.8 runs with type resolution off.** It embeds Kotlin 2.0.21's compiler for analysis
+  while this project compiles with 2.4.20, and feeding 2.4 sources to the 2.0 type solver produces
+  spurious unresolved-reference findings. Every rule this project relies on is syntactic. There is no
+  detekt 2.x; revisit when one ships against a matching compiler.
+- **`formatting:ImportOrdering` is disabled** because the rule and its own `--auto-correct` disagree:
+  the fix moves `javax.*` below `kotlinx.*`, and the check then rejects that result. Running
+  auto-correct twice does not converge. Not worth an `.editorconfig` to referee a cosmetic rule.
+- **There is no detekt baseline file, deliberately.** The codebase is clean. A template that ships a
+  baseline teaches contributors that suppression is the normal response to a finding.
 
 ## Secrets
 

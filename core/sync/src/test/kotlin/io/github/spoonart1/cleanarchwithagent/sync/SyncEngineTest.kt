@@ -5,14 +5,17 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.spoonart1.cleanarchwithagent.database.CleanArchDatabase
 import io.github.spoonart1.cleanarchwithagent.database.dao.ChecklistDao
 import io.github.spoonart1.cleanarchwithagent.database.dao.OutboxDao
+import io.github.spoonart1.cleanarchwithagent.model.OutboxEntityType
 import io.github.spoonart1.cleanarchwithagent.model.SyncStatus
 import io.github.spoonart1.cleanarchwithagent.network.model.NetworkChecklist
+import io.github.spoonart1.cleanarchwithagent.network.model.NetworkChecklistItem
 import io.github.spoonart1.cleanarchwithagent.network.model.SyncResponse
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -54,7 +57,7 @@ class SyncEngineTest {
     // --- 1. Sync success ---
 
     @Test
-    fun `a pending change is pushed, marked synced, and cleared from the outbox`() = runTest {
+    fun `test sync when a change is pending should push it, mark it synced and clear the outbox`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklist = checklistEntity(id = "c1", title = "Survey"),
             operation = outboxEntity(operationId = "op-1", entityId = "c1"),
@@ -72,7 +75,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `operations are pushed oldest first`() = runTest {
+    fun `test sync when several operations are queued should push them oldest first`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklistEntity(id = "c1"),
             outboxEntity(operationId = "op-old", entityId = "c1", createdAt = 100),
@@ -93,7 +96,7 @@ class SyncEngineTest {
     // --- 2. Retry after failure ---
 
     @Test
-    fun `a failed push leaves the change queued and reports retry`() = runTest {
+    fun `test sync when a push fails should leave the change queued and report a retry`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklistEntity(id = "c1"),
             outboxEntity(operationId = "op-1", entityId = "c1"),
@@ -112,7 +115,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `a transient failure succeeds on the next pass`() = runTest {
+    fun `test sync when a failure is transient should succeed on the next pass`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklistEntity(id = "c1"),
             outboxEntity(operationId = "op-1", entityId = "c1"),
@@ -129,7 +132,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `a change is abandoned after the attempt limit so it cannot block the queue`() = runTest {
+    fun `test sync when the attempt limit is reached should abandon the change so the queue drains`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklistEntity(id = "c1"),
             // Already at the limit minus one, so the next failure gives up.
@@ -157,7 +160,7 @@ class SyncEngineTest {
     // --- 3. Idempotent replay ---
 
     @Test
-    fun `replaying the same operation does not apply it twice`() = runTest {
+    fun `test sync when the same operation is replayed should not apply it twice`() = runTest {
         checklistDao.upsertChecklistWithOutbox(
             checklistEntity(id = "c1"),
             outboxEntity(operationId = "op-1", entityId = "c1"),
@@ -177,7 +180,7 @@ class SyncEngineTest {
     // --- 4. A pending local change is never overwritten ---
 
     @Test
-    fun `a remote change does not overwrite a local edit that is still pending`() = runTest {
+    fun `test sync when a local edit is still pending should not overwrite it with the remote change`() = runTest {
         // A checklist that has been synced before, then edited locally again.
         checklistDao.upsertChecklistWithOutbox(
             checklist = checklistEntity(
@@ -210,7 +213,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `a remote change is applied when there is no pending local edit`() = runTest {
+    fun `test sync when there is no pending local edit should apply the remote change`() = runTest {
         checklistDao.upsertChecklist(
             checklistEntity(
                 id = "c1",
@@ -235,7 +238,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `an older remote version does not clobber a newer local one`() = runTest {
+    fun `test sync when the remote version is older should not clobber the newer local one`() = runTest {
         checklistDao.upsertChecklist(
             checklistEntity(
                 id = "c1",
@@ -258,7 +261,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `an unseen remote record is inserted locally`() = runTest {
+    fun `test sync when a remote record is unseen should insert it locally`() = runTest {
         network.pullResponse = SyncResponse(
             checklists = listOf(
                 NetworkChecklist(id = "srv-new", title = "From another device", updatedAt = 500L),
@@ -276,7 +279,7 @@ class SyncEngineTest {
     // --- Sync token handling ---
 
     @Test
-    fun `the sync token advances only after a successful pull`() = runTest {
+    fun `test sync when a pull succeeds should advance the sync token`() = runTest {
         network.pullResponse = SyncResponse(syncToken = "token-99")
 
         engine.sync()
@@ -285,7 +288,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `a failed pull leaves the previous token in place`() = runTest {
+    fun `test sync when a pull fails should leave the previous token in place`() = runTest {
         val store = FakeSyncTokenStore(token = "token-original")
         val failingEngine = SyncEngine(
             checklistDao = checklistDao,
@@ -303,5 +306,226 @@ class SyncEngineTest {
             "token-original",
             store.read(),
         )
+    }
+
+    // --- Item paths ----------------------------------------------------------
+    // The same four rules as above, exercised through checklist ITEMS. These
+    // matter separately because an item carries a foreign key to its parent,
+    // which gives the insert path a failure mode a checklist does not have.
+
+    @Test
+    fun `test sync when an item is pending should push it and mark it synced`() = runTest {
+        // Given a synced parent checklist
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+
+        // And an item on it queued for push
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1", text = "Check the gauge"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // When
+        engine.sync()
+
+        // Then
+        val stored = checklistDao.getItem("i1")!!
+        assertEquals(SyncStatus.SYNCED, stored.syncStatus)
+        assertNotNull("the server id must be adopted after a push", stored.serverId)
+        assertTrue(outboxDao.pendingOperations().isEmpty())
+    }
+
+    @Test
+    fun `test sync when a remote item is unseen should insert it under its parent`() = runTest {
+        // Given a parent checklist that exists locally
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+
+        // And the server reports an item the device has not seen
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = "srv-i1",
+                    checklistId = "srv-c1",
+                    text = "From another device",
+                    updatedAt = 500L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+
+        // When
+        engine.sync()
+
+        // Then
+        val stored = checklistDao.getItemByServerId("srv-i1")
+        assertEquals("From another device", stored?.text)
+        assertEquals("c1", stored?.checklistId)
+        assertEquals(SyncStatus.SYNCED, stored?.syncStatus)
+    }
+
+    @Test
+    fun `test sync when a remote item has no local parent should skip it`() = runTest {
+        // Given no checklist with this server id exists locally
+
+        // And the server reports an item belonging to it
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = "srv-orphan",
+                    checklistId = "srv-unknown",
+                    text = "Orphan",
+                    updatedAt = 500L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+
+        // When
+        engine.sync()
+
+        // Then the row is skipped rather than violating the foreign key.
+        assertNull(
+            "an item whose parent is absent must not be inserted",
+            checklistDao.getItemByServerId("srv-orphan"),
+        )
+    }
+
+    @Test
+    fun `test sync when a remote item is newer should overwrite the local copy`() = runTest {
+        // Given a synced parent and a synced item
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+        checklistDao.upsertItem(
+            itemEntity(
+                id = "i1",
+                checklistId = "c1",
+                serverId = "srv-i1",
+                text = "Old text",
+                updatedAt = 1_000L,
+                syncStatus = SyncStatus.SYNCED,
+            ),
+        )
+
+        // And the server has a newer version
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = "srv-i1",
+                    checklistId = "srv-c1",
+                    text = "New text",
+                    isDone = true,
+                    note = "Server note",
+                    updatedAt = 9_999L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+
+        // When
+        engine.sync()
+
+        // Then
+        val stored = checklistDao.getItem("i1")!!
+        assertEquals("New text", stored.text)
+        assertTrue(stored.isDone)
+        assertEquals("Server note", stored.note)
+        assertEquals(SyncStatus.SYNCED, stored.syncStatus)
+    }
+
+    @Test
+    fun `test sync when a remote item is older should not clobber the local copy`() = runTest {
+        // Given a synced parent and a locally newer item
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+        checklistDao.upsertItem(
+            itemEntity(
+                id = "i1",
+                checklistId = "c1",
+                serverId = "srv-i1",
+                text = "Newer local text",
+                updatedAt = 9_999L,
+                syncStatus = SyncStatus.SYNCED,
+            ),
+        )
+
+        // And the server reports an older version
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = "srv-i1",
+                    checklistId = "srv-c1",
+                    text = "Stale server text",
+                    updatedAt = 1_000L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+
+        // When
+        engine.sync()
+
+        // Then
+        assertEquals("Newer local text", checklistDao.getItem("i1")!!.text)
+    }
+
+    @Test
+    fun `test sync when an item edit is still pending should flag a conflict`() = runTest {
+        // Given a synced parent
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+
+        // And an item edited locally and not yet pushed
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(
+                id = "i1",
+                checklistId = "c1",
+                serverId = "srv-i1",
+                text = "My local edit",
+                updatedAt = 1_000L,
+            ),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // And the server has a newer version of the same item
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = "srv-i1",
+                    checklistId = "srv-c1",
+                    text = "Someone else's edit",
+                    updatedAt = 9_999L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+
+        // And the push fails, so the local edit is still pending during the pull
+        network.failFirstPushes = 1
+
+        // When
+        engine.sync()
+
+        // Then
+        val stored = checklistDao.getItem("i1")!!
+        assertEquals(
+            "the local edit must survive even though the remote is newer",
+            "My local edit",
+            stored.text,
+        )
+        assertEquals(SyncStatus.CONFLICT, stored.syncStatus)
     }
 }

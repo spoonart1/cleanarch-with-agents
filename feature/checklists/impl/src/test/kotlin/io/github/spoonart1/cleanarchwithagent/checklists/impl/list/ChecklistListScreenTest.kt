@@ -26,7 +26,7 @@ class ChecklistListScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `checklists and their progress are shown`() {
+    fun `test ChecklistListContent when given checklists should show them with progress`() {
         composeRule.setContent {
             ChecklistListScreen(
                 uiState = ChecklistListUiState.Content(
@@ -48,7 +48,7 @@ class ChecklistListScreenTest {
     }
 
     @Test
-    fun `the empty state is shown when there are no checklists`() {
+    fun `test ChecklistListContent when there are no checklists should show the empty state`() {
         composeRule.setContent {
             ChecklistListScreen(
                 uiState = ChecklistListUiState.Content(
@@ -67,7 +67,7 @@ class ChecklistListScreenTest {
     }
 
     @Test
-    fun `an error state is shown instead of the list`() {
+    fun `test ChecklistListContent when the state is an error should show it instead of the list`() {
         composeRule.setContent {
             ChecklistListScreen(
                 uiState = ChecklistListUiState.Error("Could not load checklists"),
@@ -83,7 +83,7 @@ class ChecklistListScreenTest {
     }
 
     @Test
-    fun `tapping a checklist reports its id`() {
+    fun `test ChecklistListContent when a checklist is tapped should report its id`() {
         var clickedId: String? = null
         composeRule.setContent {
             ChecklistListScreen(
@@ -107,7 +107,7 @@ class ChecklistListScreenTest {
     }
 
     @Test
-    fun `creating a checklist passes the typed title through`() {
+    fun `test ChecklistListContent when a title is typed should pass it through on create`() {
         var createdTitle: String? = null
         composeRule.setContent {
             ChecklistListScreen(
@@ -128,7 +128,7 @@ class ChecklistListScreenTest {
     }
 
     @Test
-    fun `the sync indicator shows the pending count`() {
+    fun `test ChecklistListContent when changes are pending should show the count in the indicator`() {
         composeRule.setContent {
             ChecklistListScreen(
                 uiState = ChecklistListUiState.Content(

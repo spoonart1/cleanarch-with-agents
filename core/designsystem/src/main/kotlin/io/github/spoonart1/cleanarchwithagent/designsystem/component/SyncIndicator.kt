@@ -49,7 +49,11 @@ fun SyncStatusIcon(
             Triple(Icons.Default.CloudOff, syncColors.failed, "Sync failed")
 
         SyncStatus.CONFLICT ->
-            Triple(Icons.Default.ErrorOutline, syncColors.conflict, "Conflict: your version was kept")
+            Triple(
+                Icons.Default.ErrorOutline,
+                syncColors.conflict,
+                "Conflict: your version was kept",
+            )
     }
 
     Icon(

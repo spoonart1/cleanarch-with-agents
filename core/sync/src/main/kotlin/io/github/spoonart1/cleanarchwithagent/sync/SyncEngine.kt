@@ -6,15 +6,15 @@ import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistEntity
 import io.github.spoonart1.cleanarchwithagent.database.entity.ChecklistItemEntity
 import io.github.spoonart1.cleanarchwithagent.database.entity.OutboxEntity
 import io.github.spoonart1.cleanarchwithagent.model.OutboxEntityType
-import io.github.spoonart1.cleanarchwithagent.model.OutboxOperationType
 import io.github.spoonart1.cleanarchwithagent.model.SyncStatus
 import io.github.spoonart1.cleanarchwithagent.network.NetworkDataSource
 import io.github.spoonart1.cleanarchwithagent.network.model.NetworkChecklist
 import io.github.spoonart1.cleanarchwithagent.network.model.NetworkChecklistItem
 import io.github.spoonart1.cleanarchwithagent.network.model.PushRequest
+import io.github.spoonart1.cleanarchwithagent.network.model.PushResponse
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.CancellationException
 
 /** The outcome of one sync pass. */
 sealed interface SyncResult {
@@ -123,29 +123,34 @@ class SyncEngine @Inject constructor(
 
         // The server's id and timestamp are now authoritative for this record.
         when (operation.entityType) {
-            OutboxEntityType.CHECKLIST -> {
-                checklistDao.getChecklist(operation.entityId)?.let { local ->
-                    checklistDao.updateChecklist(
-                        local.copy(
-                            serverId = response.serverId,
-                            updatedAt = response.updatedAt,
-                            syncStatus = SyncStatus.SYNCED,
-                        ),
-                    )
-                }
-            }
+            OutboxEntityType.CHECKLIST -> markChecklistSynced(operation.entityId, response)
+            OutboxEntityType.CHECKLIST_ITEM -> markItemSynced(operation.entityId, response)
+        }
+    }
 
-            OutboxEntityType.CHECKLIST_ITEM -> {
-                checklistDao.getItem(operation.entityId)?.let { local ->
-                    checklistDao.updateItem(
-                        local.copy(
-                            serverId = response.serverId,
-                            updatedAt = response.updatedAt,
-                            syncStatus = SyncStatus.SYNCED,
-                        ),
-                    )
-                }
-            }
+    /** Adopts the server's id and timestamp for a pushed checklist. */
+    private suspend fun markChecklistSynced(entityId: String, response: PushResponse) {
+        checklistDao.getChecklist(entityId)?.let { local ->
+            checklistDao.updateChecklist(
+                local.copy(
+                    serverId = response.serverId,
+                    updatedAt = response.updatedAt,
+                    syncStatus = SyncStatus.SYNCED,
+                ),
+            )
+        }
+    }
+
+    /** The item counterpart of [markChecklistSynced]. */
+    private suspend fun markItemSynced(entityId: String, response: PushResponse) {
+        checklistDao.getItem(entityId)?.let { local ->
+            checklistDao.updateItem(
+                local.copy(
+                    serverId = response.serverId,
+                    updatedAt = response.updatedAt,
+                    syncStatus = SyncStatus.SYNCED,
+                ),
+            )
         }
     }
 
@@ -230,27 +235,29 @@ class SyncEngine @Inject constructor(
             return
         }
 
-        if (remote.updatedAt > local.updatedAt) {
-            checklistDao.updateChecklist(
-                local.copy(
-                    title = remote.title,
-                    updatedAt = remote.updatedAt,
-                    isDeleted = remote.deleted,
-                    syncStatus = SyncStatus.SYNCED,
-                ),
-            )
-        }
+        // Last-write-wins, now that the pending-work case is ruled out above.
+        if (remote.updatedAt <= local.updatedAt) return
+        overwriteChecklist(local, remote)
     }
 
+    /** Takes the remote version of a checklist that has no unpushed local work. */
+    private suspend fun overwriteChecklist(local: ChecklistEntity, remote: NetworkChecklist) {
+        checklistDao.updateChecklist(
+            local.copy(
+                title = remote.title,
+                updatedAt = remote.updatedAt,
+                isDeleted = remote.isDeleted,
+                syncStatus = SyncStatus.SYNCED,
+            ),
+        )
+    }
+
+    /** The item counterpart of [applyRemoteChecklist]; the same three rules apply. */
     private suspend fun applyRemoteItem(remote: NetworkChecklistItem) {
         val local = checklistDao.getItemByServerId(remote.id)
 
         if (local == null) {
-            // Only store an item whose parent checklist exists locally;
-            // otherwise the foreign key would reject it.
-            val parent = checklistDao.getChecklistByServerId(remote.checklistId)
-                ?: return
-            checklistDao.upsertItem(remote.toEntity(localChecklistId = parent.id))
+            insertRemoteItem(remote)
             return
         }
 
@@ -259,18 +266,37 @@ class SyncEngine @Inject constructor(
             return
         }
 
-        if (remote.updatedAt > local.updatedAt) {
-            checklistDao.updateItem(
-                local.copy(
-                    text = remote.text,
-                    isDone = remote.isDone,
-                    note = remote.note,
-                    updatedAt = remote.updatedAt,
-                    isDeleted = remote.deleted,
-                    syncStatus = SyncStatus.SYNCED,
-                ),
-            )
-        }
+        if (remote.updatedAt <= local.updatedAt) return
+        overwriteItem(local, remote)
+    }
+
+    /** The item counterpart of [overwriteChecklist]. */
+    private suspend fun overwriteItem(
+        local: ChecklistItemEntity,
+        remote: NetworkChecklistItem,
+    ) {
+        checklistDao.updateItem(
+            local.copy(
+                text = remote.text,
+                isDone = remote.isDone,
+                note = remote.note,
+                updatedAt = remote.updatedAt,
+                isDeleted = remote.isDeleted,
+                syncStatus = SyncStatus.SYNCED,
+            ),
+        )
+    }
+
+    /**
+     * Stores an item the device has not seen before.
+     *
+     * Skipped when the parent checklist is not present locally: the foreign key
+     * would reject the row. The item arrives on a later pass, once its parent
+     * has been pulled.
+     */
+    private suspend fun insertRemoteItem(remote: NetworkChecklistItem) {
+        val parent = checklistDao.getChecklistByServerId(remote.checklistId) ?: return
+        checklistDao.upsertItem(remote.toEntity(localChecklistId = parent.id))
     }
 
     private suspend fun hasPendingWork(type: OutboxEntityType, entityId: String): Boolean =
@@ -293,7 +319,7 @@ private fun ChecklistEntity.toNetworkModel() = NetworkChecklist(
     id = serverId ?: id,
     title = title,
     updatedAt = updatedAt,
-    deleted = isDeleted,
+    isDeleted = isDeleted,
 )
 
 private fun ChecklistItemEntity.toNetworkModel() = NetworkChecklistItem(
@@ -303,7 +329,7 @@ private fun ChecklistItemEntity.toNetworkModel() = NetworkChecklistItem(
     isDone = isDone,
     note = note,
     updatedAt = updatedAt,
-    deleted = isDeleted,
+    isDeleted = isDeleted,
 )
 
 private fun NetworkChecklist.toEntity() = ChecklistEntity(
@@ -312,7 +338,7 @@ private fun NetworkChecklist.toEntity() = ChecklistEntity(
     title = title,
     updatedAt = updatedAt,
     syncStatus = SyncStatus.SYNCED,
-    isDeleted = deleted,
+    isDeleted = isDeleted,
 )
 
 private fun NetworkChecklistItem.toEntity(localChecklistId: String) = ChecklistItemEntity(
@@ -324,5 +350,5 @@ private fun NetworkChecklistItem.toEntity(localChecklistId: String) = ChecklistI
     note = note,
     updatedAt = updatedAt,
     syncStatus = SyncStatus.SYNCED,
-    isDeleted = deleted,
+    isDeleted = isDeleted,
 )

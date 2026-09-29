@@ -55,22 +55,16 @@ class OfflineFirstChecklistRepository @Inject constructor(
         val id = idGenerator.newId()
         val now = clock.nowMillis()
 
-        checklistDao.upsertChecklistWithOutbox(
+        writeChecklist(
             checklist = ChecklistEntity(
                 id = id,
                 title = title,
                 updatedAt = now,
                 syncStatus = SyncStatus.PENDING,
             ),
-            operation = newOperation(
-                entityType = OutboxEntityType.CHECKLIST,
-                entityId = id,
-                operationType = OutboxOperationType.CREATE,
-                now = now,
-            ),
+            operationType = OutboxOperationType.CREATE,
+            now = now,
         )
-
-        syncScheduler.requestSync()
         return id
     }
 
@@ -78,21 +72,15 @@ class OfflineFirstChecklistRepository @Inject constructor(
         val existing = checklistDao.getChecklist(id) ?: return
         val now = clock.nowMillis()
 
-        checklistDao.upsertChecklistWithOutbox(
+        writeChecklist(
             checklist = existing.copy(
                 title = title,
                 updatedAt = now,
                 syncStatus = SyncStatus.PENDING,
             ),
-            operation = newOperation(
-                entityType = OutboxEntityType.CHECKLIST,
-                entityId = id,
-                operationType = OutboxOperationType.UPDATE,
-                now = now,
-            ),
+            operationType = OutboxOperationType.UPDATE,
+            now = now,
         )
-
-        syncScheduler.requestSync()
     }
 
     override suspend fun deleteChecklist(id: String) {
@@ -118,7 +106,7 @@ class OfflineFirstChecklistRepository @Inject constructor(
         val id = idGenerator.newId()
         val now = clock.nowMillis()
 
-        checklistDao.upsertItemWithOutbox(
+        writeItem(
             item = ChecklistItemEntity(
                 id = id,
                 checklistId = checklistId,
@@ -126,15 +114,9 @@ class OfflineFirstChecklistRepository @Inject constructor(
                 updatedAt = now,
                 syncStatus = SyncStatus.PENDING,
             ),
-            operation = newOperation(
-                entityType = OutboxEntityType.CHECKLIST_ITEM,
-                entityId = id,
-                operationType = OutboxOperationType.CREATE,
-                now = now,
-            ),
+            operationType = OutboxOperationType.CREATE,
+            now = now,
         )
-
-        syncScheduler.requestSync()
         return id
     }
 
@@ -168,14 +150,53 @@ class OfflineFirstChecklistRepository @Inject constructor(
         val existing = checklistDao.getItem(itemId) ?: return
         val now = clock.nowMillis()
 
-        checklistDao.upsertItemWithOutbox(
+        writeItem(
             item = change(existing).copy(
                 updatedAt = now,
                 syncStatus = SyncStatus.PENDING,
             ),
+            operationType = operationType,
+            now = now,
+        )
+    }
+
+    /**
+     * Writes a checklist and its outbox entry in one transaction, then asks for
+     * a sync.
+     *
+     * The transaction is the point: the row and the queued operation must land
+     * together, or a crash between them would leave a change the server never
+     * hears about.
+     */
+    private suspend fun writeChecklist(
+        checklist: ChecklistEntity,
+        operationType: OutboxOperationType,
+        now: Long,
+    ) {
+        checklistDao.upsertChecklistWithOutbox(
+            checklist = checklist,
+            operation = newOperation(
+                entityType = OutboxEntityType.CHECKLIST,
+                entityId = checklist.id,
+                operationType = operationType,
+                now = now,
+            ),
+        )
+
+        syncScheduler.requestSync()
+    }
+
+    /** The item counterpart of [writeChecklist]. */
+    private suspend fun writeItem(
+        item: ChecklistItemEntity,
+        operationType: OutboxOperationType,
+        now: Long,
+    ) {
+        checklistDao.upsertItemWithOutbox(
+            item = item,
             operation = newOperation(
                 entityType = OutboxEntityType.CHECKLIST_ITEM,
-                entityId = itemId,
+                entityId = item.id,
                 operationType = operationType,
                 now = now,
             ),

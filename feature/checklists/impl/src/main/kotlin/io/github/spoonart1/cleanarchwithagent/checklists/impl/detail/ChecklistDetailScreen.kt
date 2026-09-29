@@ -227,9 +227,27 @@ private fun ChecklistDetailPreview() {
             uiState = ChecklistDetailUiState.Content(
                 title = "Site survey",
                 items = listOf(
-                    ChecklistItemUiModel("1", "Check the gauge", true, "Read 4.2 bar", SyncStatus.SYNCED),
-                    ChecklistItemUiModel("2", "Photograph the panel", false, null, SyncStatus.PENDING),
-                    ChecklistItemUiModel("3", "Log the serial number", false, null, SyncStatus.CONFLICT),
+                    ChecklistItemUiModel(
+                        id = "1",
+                        text = "Check the gauge",
+                        isDone = true,
+                        note = "Read 4.2 bar",
+                        syncStatus = SyncStatus.SYNCED,
+                    ),
+                    ChecklistItemUiModel(
+                        id = "2",
+                        text = "Photograph the panel",
+                        isDone = false,
+                        note = null,
+                        syncStatus = SyncStatus.PENDING,
+                    ),
+                    ChecklistItemUiModel(
+                        id = "3",
+                        text = "Log the serial number",
+                        isDone = false,
+                        note = null,
+                        syncStatus = SyncStatus.CONFLICT,
+                    ),
                 ),
                 checklistSyncStatus = SyncStatus.PENDING,
                 syncState = SyncState.Idle(pendingCount = 2),
