@@ -8,8 +8,9 @@ An open-source Android starter template demonstrating multi-module Clean Archite
 offline-first sync. It is meant to be **read and learned from**, so prefer clarity over cleverness:
 no reflection tricks, no clever generics, no abbreviations a newcomer would have to decode.
 
-Build status: Phases 1–6 complete. The app runs end to end against an in-memory fake backend, and CI
-runs build, lint and unit tests on every PR. Remaining: README (7). See "Build phases".
+Build status: v1 complete — all seven phases. The app runs end to end against an in-memory fake
+backend, CI runs build, lint and unit tests on every PR, and `./gradlew build test` passes from a
+fresh clone with no secrets. See "Build phases" for what was deliberately left out of v1.
 
 ## How to work here
 
@@ -193,7 +194,7 @@ gitignored. Never introduce a code path that reads signing material from a file 
 4. ✅ `core:designsystem`, both features, navigation assembly
 5. ✅ CI workflow, app smoke tests
 6. ✅ This file, and the `new-feature-module` skill
-7. README
+7. ✅ README
 
 Out of scope for v1 (roadmap only): photo attachments, conflict-resolution UI, Macrobenchmark and
 baseline profiles, Fastlane, a real backend.
