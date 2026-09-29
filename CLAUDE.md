@@ -8,8 +8,8 @@ An open-source Android starter template demonstrating multi-module Clean Archite
 offline-first sync. It is meant to be **read and learned from**, so prefer clarity over cleverness:
 no reflection tricks, no clever generics, no abbreviations a newcomer would have to decode.
 
-Build status: Phases 1–4 and 6 complete. The app runs end to end against an in-memory fake backend.
-Remaining: CI and app smoke tests (5), README (7). See "Build phases".
+Build status: Phases 1–6 complete. The app runs end to end against an in-memory fake backend, and CI
+runs build, lint and unit tests on every PR. Remaining: README (7). See "Build phases".
 
 ## How to work here
 
@@ -61,6 +61,22 @@ fails with `NoSuchMethodException`.
 
 Gradle's daemon holds file locks on Windows. If a directory won't delete, run `./gradlew --stop`
 first.
+
+### CI
+
+`.github/workflows/ci.yml` runs build, unit tests and lint on pushes to `main` and on PRs. Three
+choices there are deliberate and worth not undoing:
+
+- **`runs-on: ubuntu-24.04`, not `ubuntu-latest`.** That label moves to Ubuntu 26.04 during late
+  2026, where the default JDK becomes 25 and JDK 8 is removed. Moving should be a decision, not a
+  surprise.
+- **No `cache: gradle` on `setup-java`.** `gradle/actions/setup-gradle` owns the Gradle cache, and
+  the Gradle docs warn against configuring both.
+- **`gradlew` must stay mode `100755` in git.** Committed as `100644` it fails on Linux runners with
+  "Permission denied" before anything builds. Check with `git ls-files -s gradlew`.
+
+Only `main` writes to the Gradle cache; PR runs read it. A PR reporting a cache miss is expected
+behaviour, not a fault.
 
 ## Architecture
 
@@ -175,7 +191,7 @@ gitignored. Never introduce a code path that reads signing material from a file 
 2. ✅ `core:model`, `core:common`, `core:database`, `core:network` (fake backend + network simulator)
 3. ✅ `core:sync`, `core:data`
 4. ✅ `core:designsystem`, both features, navigation assembly
-5. CI workflow, app smoke tests
+5. ✅ CI workflow, app smoke tests
 6. ✅ This file, and the `new-feature-module` skill
 7. README
 

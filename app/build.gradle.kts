@@ -11,7 +11,9 @@ android {
         applicationId = "io.github.spoonart1.cleanarchwithagent"
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Hilt's test Application, not the default runner — see CleanArchTestRunner.
+        testInstrumentationRunner =
+            "io.github.spoonart1.cleanarchwithagent.CleanArchTestRunner"
     }
 
     signingConfigs {
@@ -78,4 +80,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.hilt.android.testing)
     kspAndroidTest(libs.hilt.compiler)
+    // The smoke tests drive real Compose UI in the launched Activity. The
+    // Compose convention plugin adds the BOM and ui-test-junit4 to
+    // androidTestImplementation, so only navigation-testing is extra here.
+    androidTestImplementation(libs.androidx.navigation.testing)
 }
