@@ -107,7 +107,7 @@ Judge code against current practice, not habit: flag a pattern as dated only whe
 
 **Personal data**
 
-These checks are jurisdiction-neutral and worth applying anywhere. Most teams are subject to at least one privacy regime — GDPR, CCPA, Singapore's PDPA, Japan's APPI — and they broadly agree on the basics below. Report the technical fact (what data goes where); leave the legal conclusion to the team and their counsel.
+These checks are jurisdiction-neutral and worth applying anywhere. Most teams are subject to at least one privacy regime, and those regimes broadly agree on the basics below. Report the technical fact (what data goes where); leave the legal conclusion to the team and their counsel.
 
 - Personal data (names, phone numbers, emails, precise location, IDs, payment, health) written to `Log`, crash reports, analytics events, or exception messages.
 - Collecting more personal data than the feature needs.
