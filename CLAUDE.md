@@ -2,6 +2,11 @@
 
 Guidance for Claude Code when working in this repository.
 
+## Response style
+
+Answer tersely: short sentences, no preamble, no restating the question. Code, commands, file
+paths and error messages stay exact. Security warnings and confirmations stay in full sentences.
+
 ## What this project is
 
 An open-source Android starter template: multi-module Clean Architecture with offline-first sync.
