@@ -28,8 +28,11 @@ profiles, Fastlane, a real backend.
   no KDoc headers, no inline comments. Read it at the start, not the end. Details in
   `.claude/conventions.md` § "Comments when an agent writes code".
 - **Verify, don't assume.** Run the build after multi-file changes. Surface dependency and version
-  conflicts instead of pinning around them.
+  conflicts instead of pinning around them. Never report a build or test result that was not
+  actually run, and never claim a file, symbol or test exists without reading or grepping for it.
 - **Ask when an API is uncertain.** A wrong guess in a template teaches everyone who clones it.
+  Never state a signature, DSL shape or version from memory: check the jar, the catalog or Maven
+  Central, or say plainly that it is unverified. Ambiguous requirement, same rule: ask, don't guess.
 - **Each unit of work ends with** `./gradlew build test` passing, a conventional commit, and a stop
   for maintainer confirmation.
 
