@@ -67,6 +67,12 @@ Two rules are easy to get backwards, so they are worth naming here:
   `hasItems` to `isHasItems`.
 - **The 20-line cap counts blank and comment lines, and the signature line.** Do not tell the user
   they have room they do not have.
+- **Comments are off by default** (§5, switched by `cleanarch.aiComments` in `gradle.properties`).
+  Read the property before writing a patch snippet — a suggested fix should carry no explanatory
+  comment when it is off. Put the explanation in your report instead, which is where it belongs
+  anyway: your job is to say *why* the fix works, and a comment in the snippet buries that in a diff.
+  Exception: if the fix turns on a `@Suppress` or relies on a genuinely surprising ordering
+  constraint, that reason goes in the code in either mode.
 
 Also:
 - Suggest a unit test for every fix in business logic — the gated set is `businessLogicIncludes`

@@ -27,6 +27,15 @@ least one of those. If the name given is not already in that form, normalise it 
 Read `CLAUDE.md` first if you have not already. The rules below are not stylistic; breaking them
 defeats the point of the template.
 
+Check `cleanarch.aiComments` in `gradle.properties` before step 1 — it ships `false`, so write the
+files below with no KDoc headers and no inline comments beyond what the snippets already show. When
+the property is on, add a KDoc header to each new Kotlin declaration saying what it is responsible
+for. Three comments here are part of the template in either mode: the KDoc on the route constant in
+step 4, which documents the one public thing an `api` module exists to expose; the
+`// inject repositories from core:data here` placeholder in step 5, which is an instruction to
+replace rather than a comment to keep; and the Given/When/Then markers in step 7. See
+`.claude/conventions.md` § "Comments when an agent writes code".
+
 ## 1. Create the directories
 
 Gradle 9 refuses to configure a module whose directory does not exist, so make these before

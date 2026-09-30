@@ -223,6 +223,44 @@ Apply where it genuinely improves the code. Say what the alternative buys; **if 
   than injected — the latter makes a function untestable and is flagged by detekt's
   `InjectDispatcher`.
 
+### Comments when an agent writes code
+
+**Off by default.** When an agent writes or rewrites code here, it adds no KDoc header and no
+explanatory inline comments unless the switch below is on.
+
+The switch is a Gradle property in `gradle.properties`:
+
+```properties
+cleanarch.aiComments=false   # the committed default
+```
+
+Turn it on for a single run with `-Pcleanarch.aiComments=true`, or by saying so in the prompt. **The
+build does not read this property** — no task consumes it and nothing fails if it is wrong. It is a
+flag agents read, kept in `gradle.properties` so the setting lives in the repo, survives across
+sessions, and is greppable, matching the `-PdetektAutoCorrect` pattern.
+
+| | Off (default) | On |
+|---|---|---|
+| KDoc header on a new or substantially rewritten class/file | no | yes — one block saying what the type is responsible for and, where it is not obvious, why it exists |
+| Inline comments on non-obvious logic | no | yes — on the branch, workaround or ordering constraint that is genuinely surprising |
+
+Off is the default because this template is meant to be read, and a comment restating the code
+(`// increment the counter`) is noise that goes stale. Code that needs a comment to be understood is
+usually asking to be renamed or split instead. Prefer that fix in either mode.
+
+**Four things the switch does not govern.** These are required whatever it is set to, so never strip
+them when off and never treat adding them as "turning comments on":
+
+- `// Given` / `// When` / `// And` / `// Then` markers in tests — §2, a separate rule.
+- The comment explaining every deviation in `config/detekt/detekt.yml`, and the same for a version
+  constraint in `gradle/libs.versions.toml`.
+- Any `@Suppress`, `TODO`, or deliberate-looking oddity, which must carry its reason.
+- A public API's existing KDoc. Editing a documented declaration means updating its KDoc to match;
+  leaving documentation that now lies is worse than having none.
+
+When off and you meet something a reader would genuinely stumble over, **say it in your response
+rather than in the file.** That keeps the decision with the maintainer, who can ask for the comment.
+
 **Never recommend or use an API without confirming it exists in the version this project pins.**
 Check `gradle/libs.versions.toml` and the module's `build.gradle.kts` first. This project pins AGP 9,
 Kotlin 2.4 and `compileSdk` 37, where a good deal of widely-repeated advice is simply wrong. A

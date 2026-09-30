@@ -48,6 +48,11 @@ not restate the rules, so the two cannot drift apart. The sections you need ever
 - **§3 Testing** — fakes over mocks, where the fixtures actually live per module, Turbine and
   `runTest`, `MainDispatcherRule`, covering branches rather than the happy path.
 - **§4 Coverage** — the two numbers, and chasing coverage honestly.
+- **§5 Comments** — check `cleanarch.aiComments` in `gradle.properties` before you write. It ships
+  `false`, meaning no KDoc header on a new test class and no inline commentary on the fixture. **The
+  Given/When/Then markers are not affected and are always required** — they are §2, a separate rule,
+  and the switch being off never licenses dropping them. When the switch is on, a header on a test
+  class is worth it only where the class covers something a reader would not guess from its name.
 
 Test sources are exempt from `LongMethod`, `MagicNumber` and `MaxLineLength` (§2), so do not contort
 a test to hit a line count — but readability still matters. Keep the fixture close to the assertion

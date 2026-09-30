@@ -70,12 +70,21 @@ Check the change against, at minimum:
 - **Testing rules** (§3) and **coverage honesty** (§4) — especially that an added `coverageExclusions`
   entry used to silence a failing gate is a finding, not a fix.
 
-Two habits that prevent most false positives here:
+- **Comments** (§5) — read `cleanarch.aiComments` in `gradle.properties` before judging any of this.
+  It ships `false`. When it is off, **a missing KDoc header or a missing inline comment is not a
+  finding** — that is the project's stated default, and reporting it is noise. What *is* a finding in
+  either mode: a comment that contradicts the code, KDoc left stale by the change under review, a
+  missing Given/When/Then marker, an undocumented `@Suppress` or detekt-config deviation, and a
+  comment that merely restates the line above it.
+
+Three habits that prevent most false positives here:
 
 1. **Do not report a deviation that `config/detekt/detekt.yml` documents as intentional.** Several
    rules are deliberately disabled or narrowed, each with a comment saying why.
 2. **Do not confuse the two coverage numbers** (§4). A module reporting 67% is not a finding if
    `jacocoCoverageVerificationAll` passes.
+3. **Do not report absent comments when the switch is off.** Check the property before writing that
+   finding, not after.
 
 When a rule and this file disagree, `.claude/conventions.md` wins — and say so in your report, since
 that means one of them needs updating.

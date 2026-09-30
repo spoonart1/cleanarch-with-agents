@@ -27,6 +27,12 @@ A workable order for a new component:
 4. UI and event wiring
 5. Previews, sample data, docs
 
+**Check the comment switch before step 1.** `cleanarch.aiComments` in `gradle.properties` decides
+whether code you write carries a KDoc header and inline comments. It ships `false`, so the default is
+none. Read it at the start of a task rather than at the end — retrofitting comments, or stripping a
+file full of them, is a diff nobody asked for. See `.claude/conventions.md` § "Comments when an agent
+writes code" for what the switch does and does not cover.
+
 **Verify, don't assume.** Run the build after multi-file changes. Surface dependency and version
 conflicts before working around them — a version pin chosen silently becomes someone else's puzzle.
 
@@ -46,8 +52,10 @@ maintainer confirmation before the next phase begins.**
 ./gradlew jacocoTestReportAll            # coverage reports (HTML + XML)
 ./gradlew jacocoCoverageVerificationAll  # the 90% business-logic gate
 ./gradlew :core:database:test    # one module
-./gradlew :core:sync:test --tests "*OutboxTest*"          # one class
-./gradlew :core:sync:test --tests "*OutboxTest.replays*"  # one method
+# One class or one method. Note these take testDebugUnitTest, not the `test`
+# lifecycle task, which does not accept --tests.
+./gradlew :core:sync:testDebugUnitTest --tests "*OutboxTest*"
+./gradlew :core:sync:testDebugUnitTest --tests "*OutboxTest.replays*"
 ./gradlew lint                   # lint only
 ./gradlew projects               # confirm module wiring
 ./gradlew :feature:settings:impl:dependencies --configuration debugCompileClasspath | grep feature
@@ -135,6 +143,8 @@ In brief — read the file for the detail and the reasoning:
 - **Fakes over mocks.** No mocking library is on any classpath, deliberately.
 - **Business logic is gated at 90% line coverage.** Exclusions are for code with no logic, never for
   code that is merely hard to test.
+- **Agent-written comments are off by default**, switched by `cleanarch.aiComments` in
+  `gradle.properties`. Not read by the build — a flag for agents.
 
 The architectural rules that must not be broken are above, in "Rules that must not be broken"; those
 stay here because they define the template rather than its style.

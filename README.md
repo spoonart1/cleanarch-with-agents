@@ -21,9 +21,10 @@ This template is that week, already done:
 - **The architecture is enforced, not just described.** No feature module can see another feature's
   implementation, because the dependency graph makes it impossible — not because a document asks
   nicely.
-- **It is meant to be read.** Comments explain *why*, not what. Where something is non-obvious
-  (AGP 9's DSL, a conflict rule, a Robolectric workaround) the reasoning is written down next to the
-  code.
+- **It is meant to be read.** The code carries few comments by design — names and structure are
+  expected to carry the meaning. Where something genuinely is non-obvious (AGP 9's DSL, a conflict
+  rule, a Robolectric workaround) the reasoning is written down, next to the code when it belongs
+  there and in `CLAUDE.md` when it is a project-wide constraint.
 
 ## Architecture
 
@@ -104,7 +105,7 @@ editing.
 ```bash
 git clone <this-repo-url>
 cd CleanArchWithAgent
-./gradlew build test          # ~2.5 minutes cold, 70 tests
+./gradlew build test          # ~2.5 minutes cold, 122 tests
 ```
 
 Then open the project in Android Studio and run the `app` configuration, or:
@@ -178,25 +179,51 @@ transport failure.
 To point the template at a real backend, set a base URL and swap one binding in
 `core/network/.../di/NetworkModule.kt` — `RetrofitNetworkDataSource` is already written.
 
-## Using the AI skill
+## Working with a coding agent
 
-The repository ships instructions for coding agents:
+The repository ships its own agent instructions, so an agent that clones it already knows the rules
+rather than inferring them from the code:
 
-- **`CLAUDE.md`** — architecture, the rules that must not be broken, commands, and the build
-  constraints that are non-obvious (AGP 9's DSL differs from every AGP 8 example online).
-- **`.claude/skills/new-feature-module/`** — a skill that walks an agent through adding a feature.
+| Path | What it is |
+|---|---|
+| **`CLAUDE.md`** | Architecture, the rules that must not be broken, commands, and the build constraints that are non-obvious — AGP 9's DSL differs from nearly every AGP 8 example online |
+| **`.claude/conventions.md`** | The canonical code conventions: naming, test structure, the coverage gate, comments. `CLAUDE.md` and the agents point here rather than restating, so there is one place to edit |
+| **`.claude/agents/`** | `code-reviewer`, `test-writer` and `bug-fixer` — scoped to this project's conventions. The reviewer and bug-fixer are read-only; the test-writer may write test sources only |
+| **`.claude/skills/`** | `new-feature-module` and `rename-module` |
 
 In [Claude Code](https://claude.com/claude-code):
 
 ```
-/new-feature-module inspections
+/new-feature-module inspections    # add a feature as a paired api/impl module set
+/rename-module com.acme.fieldops   # make a fresh clone your own
 ```
 
-It creates the `api` and `impl` modules with the convention plugins, a ViewModel with immutable UI
-state, a passing test, and the navigation multibinding — then verifies the module boundary rule and
-runs `./gradlew build test`.
+`new-feature-module` creates the `api` and `impl` modules with the convention plugins, a ViewModel
+with immutable UI state, a passing test, and the navigation multibinding — then verifies the module
+boundary rule and runs `./gradlew build test`. It was tested by generating a throwaway feature,
+confirming the build passed, and deleting it.
 
-The skill was tested by generating a throwaway feature, confirming the build passed, and deleting it.
+`rename-module` moves the package, Android namespace, `applicationId`, convention plugin ids and root
+project name together, because moving four of the five leaves a build that compiles and a project
+still carrying someone else's name.
+
+### Comments are off by default
+
+When an agent writes code here it adds no KDoc headers and no inline commentary, on the reasoning
+that a comment restating the code goes stale and code needing a comment to be understood usually
+wants renaming instead. Turn it on when you want the opposite:
+
+```properties
+# gradle.properties
+cleanarch.aiComments=true
+```
+
+No Gradle task reads this — it is a flag the agents read, kept in `gradle.properties` so the choice
+lives in the repo and survives across sessions. Four things stay regardless: the Given/When/Then
+markers in tests, the comment explaining each deliberate deviation in `config/detekt/detekt.yml` and
+`gradle/libs.versions.toml`, the reason on any `@Suppress`, and existing KDoc on a public API, which
+must be updated rather than left to lie. See `.claude/conventions.md` § "Comments when an agent
+writes code".
 
 ## Tech stack
 
@@ -210,7 +237,9 @@ Built with AGP 9 and Gradle 9. `minSdk` 26, `targetSdk` 36, `compileSdk` 37. All
 ## Testing
 
 ```bash
-./gradlew test    # 70 JVM tests, no emulator needed
+./gradlew test                           # 122 JVM tests, no emulator needed
+./gradlew detektAll                      # static analysis, every module
+./gradlew jacocoCoverageVerificationAll  # the 90% business-logic coverage gate
 ```
 
 DAO and Compose UI tests run on Robolectric, so the whole suite runs in CI without a device. The
@@ -219,6 +248,13 @@ instrumented smoke tests in `app/src/androidTest/` need an emulator:
 ```bash
 ./gradlew :app:connectedDebugAndroidTest
 ```
+
+Two conventions are enforced by custom detekt rules in `tools/detekt-rules/`, not merely documented:
+booleans read as a question (`isLoading`, `hasItems`, `canRetry`), and test names read as a sentence
+— `` `test <function> when <clause> should <result>` `` — so a CI failure says what broke without
+anyone opening the file. Test bodies follow Given / When / Then. Business logic is gated at 90% line
+coverage; UI and generated code are excluded, because a gate people learn to ignore is worse than
+none. The full reasoning is in `.claude/conventions.md`.
 
 CI runs build, unit tests and lint on every pull request.
 
