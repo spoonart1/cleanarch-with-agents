@@ -14,10 +14,9 @@ Multi-module Clean Architecture · Offline-first sync that works without a serve
 
 </div>
 
-> **Demo GIF goes here.** Record the offline round trip: create a checklist → switch the network
-> simulator to Offline → add items and watch the badges turn to *pending* → switch back to Normal →
-> watch them turn *synced*. Save it as `docs/demo.gif` and replace this block with
-> `![Demo](docs/demo.gif)`.
+<p align="center">
+  <img src="docs/demo.gif" alt="Demo: checklist edits queue while offline and sync when the network returns" width="30%">
+</p>
 
 ---
 
