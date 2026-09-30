@@ -7,6 +7,7 @@ import io.github.spoonart1.cleanarchwithagent.network.model.PushRequest
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -209,6 +210,89 @@ class FakeNetworkDataSourceTest {
 
         // Then
         assertEquals("Seeded", response.items.single().text)
+    }
+
+    // --- Server id allocation ------------------------------------------------
+    // Ids came from `map.size + 1`, which is not monotonic: size falls on a
+    // delete and two creates can read the same value, so one record silently
+    // overwrote another in the map.
+
+    @Test
+    fun `test push when two items are created should assign distinct server ids`() = runTest {
+        // Given two independent item creates
+        val first = dataSource.push(createItem("op-1", "local-item-1", "First"))
+
+        // When
+        val second = dataSource.push(createItem("op-2", "local-item-2", "Second"))
+
+        // Then
+        assertNotEquals(
+            "a reused server id would overwrite the earlier item",
+            first.serverId,
+            second.serverId,
+        )
+        assertEquals(2, dataSource.pull(syncToken = null).items.size)
+    }
+
+    @Test
+    fun `test push when an item was deleted should not reuse its server id for the next create`() =
+        runTest {
+            // Given an item that is created and then deleted
+            val created = dataSource.push(createItem("op-1", "local-item-1", "Doomed"))
+            dataSource.push(
+                PushRequest(
+                    operationId = "op-2",
+                    operation = FakeNetworkDataSource.OPERATION_DELETE,
+                    item = NetworkChecklistItem(
+                        id = created.serverId,
+                        checklistId = "srv-checklist-1",
+                        text = "Doomed",
+                        updatedAt = 0,
+                    ),
+                ),
+            )
+
+            // When another item is created afterwards
+            val next = dataSource.push(createItem("op-3", "local-item-2", "Fresh"))
+
+            // Then it gets its own id rather than the deleted one's
+            assertNotEquals(
+                "reusing a deleted id would overwrite the deleted record",
+                created.serverId,
+                next.serverId,
+            )
+            assertEquals(2, dataSource.pull(syncToken = null).items.size)
+        }
+
+    @Test
+    fun `test push when two checklists are created should assign distinct server ids`() = runTest {
+        // Given one checklist create
+        val first = dataSource.push(createChecklist("op-1", "local-1", "Survey"))
+
+        // When a second is created
+        val second = dataSource.push(createChecklist("op-2", "local-2", "Inspection"))
+
+        // Then
+        assertNotEquals(
+            "a reused server id would overwrite the earlier checklist",
+            first.serverId,
+            second.serverId,
+        )
+    }
+
+    @Test
+    fun `test clear when called should restart the server id sequence`() = runTest {
+        // Given a checklist already created on the server
+        dataSource.push(createChecklist("op-1", "local-1", "Survey"))
+
+        // When the server state is cleared
+        dataSource.clear()
+
+        // And a new checklist is created
+        val afterClear = dataSource.push(createChecklist("op-2", "local-2", "Inspection"))
+
+        // Then the sequence starts over, since the records it could collide with are gone
+        assertEquals("srv-checklist-1", afterClear.serverId)
     }
 
     private fun createChecklist(

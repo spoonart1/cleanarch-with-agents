@@ -45,6 +45,18 @@ class FakeNetworkDataSource @Inject constructor(
     /** Serialises mutations so a concurrent push cannot interleave mid-operation. */
     private val mutex = Mutex()
 
+    /**
+     * Monotonic id sources, one per collection.
+     *
+     * Deliberately not `map.size + 1`: size falls when a record is removed, and
+     * two creates that both read it before either writes see the same value. A
+     * reused id silently overwrites the earlier record, which on the next pull
+     * lands on the wrong local row. Only ever incremented, never reset — except
+     * by [clear], which drops the records too.
+     */
+    private var nextChecklistNumber = 1L
+    private var nextItemNumber = 1L
+
     override suspend fun pull(syncToken: String?): SyncResponse {
         simulator.simulate()
 
@@ -81,7 +93,7 @@ class FakeNetworkDataSource @Inject constructor(
         val incoming = requireNotNull(request.checklist)
         // The server assigns its own id on create; updates keep the one it gave out.
         val serverId = if (request.operation == OPERATION_CREATE) {
-            "srv-checklist-${checklists.size + 1}"
+            "srv-checklist-${nextChecklistNumber++}"
         } else {
             incoming.id
         }
@@ -102,7 +114,7 @@ class FakeNetworkDataSource @Inject constructor(
     private fun applyItem(request: PushRequest, now: Long): PushResponse {
         val incoming = requireNotNull(request.item)
         val serverId = if (request.operation == OPERATION_CREATE) {
-            "srv-item-${items.size + 1}"
+            "srv-item-${nextItemNumber++}"
         } else {
             incoming.id
         }
@@ -133,6 +145,8 @@ class FakeNetworkDataSource @Inject constructor(
         checklists.clear()
         items.clear()
         appliedOperations.clear()
+        nextChecklistNumber = 1L
+        nextItemNumber = 1L
     }
 
     companion object {

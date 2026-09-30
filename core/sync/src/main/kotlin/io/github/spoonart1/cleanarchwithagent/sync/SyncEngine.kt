@@ -24,6 +24,20 @@ sealed interface SyncResult {
     data class Retry(val reason: String) : SyncResult
 }
 
+/** What to do with one outbox entry, decided before the network is touched. */
+private sealed interface PushPlan {
+    data class Send(val request: PushRequest) : PushPlan
+
+    /** The row is gone; the change was superseded, so discard the entry. */
+    data object Drop : PushPlan
+
+    /** Not sendable yet — it depends on an operation still queued ahead of it. */
+    data object Defer : PushPlan
+}
+
+/** Whether an outbox entry may now be cleared, or must stay queued. */
+private enum class PushOutcome { SENT, DEFERRED }
+
 /**
  * Drains the outbox, then applies remote changes.
  *
@@ -95,30 +109,63 @@ class SyncEngine @Inject constructor(
      */
     private suspend fun pushPendingOperations() {
         for (operation in outboxDao.pendingOperations()) {
-            try {
-                push(operation)
-                outboxDao.deleteByOperationId(operation.operationId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val message = e.message ?: e::class.simpleName
-                outboxDao.recordFailure(operation.operationId, message)
-
-                if (operation.attemptCount + 1 >= MAX_PUSH_ATTEMPTS) {
-                    markFailed(operation)
-                    outboxDao.deleteByOperationId(operation.operationId)
-                    // Give up on this one but keep draining the queue.
-                    continue
-                }
-                // Transient: stop here so ordering is preserved, and let the
-                // worker's backoff decide when to try again.
-                throw e
-            }
+            pushOne(operation)
         }
     }
 
-    private suspend fun push(operation: OutboxEntity) {
-        val request = buildRequest(operation) ?: return
+    /**
+     * Pushes one entry, clearing it from the outbox once it is safely sent.
+     *
+     * Rethrows when the failure is transient, which stops the drain so ordering
+     * is preserved; returns normally when the entry has been dealt with, whether
+     * that meant sending it, deferring it or abandoning it.
+     */
+    private suspend fun pushOne(operation: OutboxEntity) {
+        try {
+            if (push(operation) == PushOutcome.DEFERRED) {
+                recordAttempt(operation, DEFERRED_ERROR)
+                return
+            }
+            outboxDao.deleteByOperationId(operation.operationId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Give up on an exhausted entry but keep draining the queue;
+            // otherwise let the worker's backoff decide when to try again.
+            val abandoned = recordAttempt(operation, e.message ?: e::class.simpleName)
+            if (!abandoned) throw e
+        }
+    }
+
+    /**
+     * Spends one of an entry's attempts, abandoning it once they run out.
+     *
+     * Shared by the two ways an entry can fail to go out. A deferral is normally
+     * transient — the item is waiting for its parent to be pushed, a pass or two
+     * later — but it can also be terminal: if the parent carries a server id the
+     * server no longer recognises, the item would defer on every pass forever,
+     * invisibly. Spending an attempt either way means such an entry eventually
+     * surfaces as [SyncStatus.FAILED] rather than sitting in the outbox unnoticed.
+     *
+     * @return true if the entry was abandoned, false if it remains queued.
+     */
+    private suspend fun recordAttempt(operation: OutboxEntity, error: String?): Boolean {
+        outboxDao.recordFailure(operation.operationId, error)
+
+        val isExhausted = operation.attemptCount + 1 >= MAX_PUSH_ATTEMPTS
+        if (isExhausted) {
+            markFailed(operation)
+            outboxDao.deleteByOperationId(operation.operationId)
+        }
+        return isExhausted
+    }
+
+    private suspend fun push(operation: OutboxEntity): PushOutcome {
+        val request = when (val plan = planRequest(operation)) {
+            PushPlan.Drop -> return PushOutcome.SENT
+            PushPlan.Defer -> return PushOutcome.DEFERRED
+            is PushPlan.Send -> plan.request
+        }
         val response = network.push(request)
 
         // The server's id and timestamp are now authoritative for this record.
@@ -126,6 +173,7 @@ class SyncEngine @Inject constructor(
             OutboxEntityType.CHECKLIST -> markChecklistSynced(operation.entityId, response)
             OutboxEntityType.CHECKLIST_ITEM -> markItemSynced(operation.entityId, response)
         }
+        return PushOutcome.SENT
     }
 
     /** Adopts the server's id and timestamp for a pushed checklist. */
@@ -155,31 +203,52 @@ class SyncEngine @Inject constructor(
     }
 
     /**
-     * Builds the wire request for an outbox entry.
+     * Decides what to do with an outbox entry.
      *
-     * Returns null when the referenced row is gone — the change was superseded,
-     * so the entry is simply dropped rather than failing the pass.
+     * [PushPlan.Drop] when the referenced row is gone — the change was
+     * superseded, so the entry is discarded rather than failing the pass.
      */
-    private suspend fun buildRequest(operation: OutboxEntity): PushRequest? =
+    private suspend fun planRequest(operation: OutboxEntity): PushPlan =
         when (operation.entityType) {
-            OutboxEntityType.CHECKLIST ->
-                checklistDao.getChecklist(operation.entityId)?.let { local ->
-                    PushRequest(
-                        operationId = operation.operationId,
-                        operation = operation.operationType.name,
-                        checklist = local.toNetworkModel(),
+            OutboxEntityType.CHECKLIST -> {
+                val local = checklistDao.getChecklist(operation.entityId)
+                if (local == null) {
+                    PushPlan.Drop
+                } else {
+                    PushPlan.Send(
+                        PushRequest(
+                            operationId = operation.operationId,
+                            operation = operation.operationType.name,
+                            checklist = local.toNetworkModel(),
+                        ),
                     )
                 }
+            }
 
-            OutboxEntityType.CHECKLIST_ITEM ->
-                checklistDao.getItem(operation.entityId)?.let { local ->
-                    PushRequest(
-                        operationId = operation.operationId,
-                        operation = operation.operationType.name,
-                        item = local.toNetworkModel(),
-                    )
-                }
+            OutboxEntityType.CHECKLIST_ITEM -> planItemRequest(operation)
         }
+
+    /**
+     * The item counterpart of [planRequest].
+     *
+     * An item is only pushable once its parent has a server id, because the
+     * request has to name the parent the way the server knows it. Until then the
+     * entry is deferred rather than dropped, so the item follows on a later pass
+     * once its parent's own push has completed.
+     */
+    private suspend fun planItemRequest(operation: OutboxEntity): PushPlan {
+        val local = checklistDao.getItem(operation.entityId) ?: return PushPlan.Drop
+        val parentServerId = checklistDao.getChecklist(local.checklistId)?.serverId
+            ?: return PushPlan.Defer
+
+        return PushPlan.Send(
+            PushRequest(
+                operationId = operation.operationId,
+                operation = operation.operationType.name,
+                item = local.toNetworkModel(parentServerId),
+            ),
+        )
+    }
 
     private suspend fun markFailed(operation: OutboxEntity) {
         when (operation.entityType) {
@@ -292,7 +361,9 @@ class SyncEngine @Inject constructor(
      *
      * Skipped when the parent checklist is not present locally: the foreign key
      * would reject the row. The item arrives on a later pass, once its parent
-     * has been pulled.
+     * has been pulled. [remote.checklistId] is matched against `serverId`, which
+     * is why the push side must send the parent's server id and not its local
+     * one — see [toNetworkModel].
      */
     private suspend fun insertRemoteItem(remote: NetworkChecklistItem) {
         val parent = checklistDao.getChecklistByServerId(remote.checklistId) ?: return
@@ -309,6 +380,9 @@ class SyncEngine @Inject constructor(
          * the queue, since operations are pushed oldest-first.
          */
         const val MAX_PUSH_ATTEMPTS = 5
+
+        /** Recorded against a deferred entry, so a stuck one is diagnosable. */
+        const val DEFERRED_ERROR = "Waiting for the parent checklist to be pushed"
     }
 }
 
@@ -322,9 +396,16 @@ private fun ChecklistEntity.toNetworkModel() = NetworkChecklist(
     isDeleted = isDeleted,
 )
 
-private fun ChecklistItemEntity.toNetworkModel() = NetworkChecklistItem(
+/**
+ * [parentServerId] is the id the *server* knows the parent by, not the local
+ * one. Sending the local id would make the item unmatchable on the way back:
+ * the pull resolves a parent by server id, so the lookup would miss and the
+ * item would be dropped — and against a real backend it would leak device-local
+ * ids into the wire format.
+ */
+private fun ChecklistItemEntity.toNetworkModel(parentServerId: String) = NetworkChecklistItem(
     id = serverId ?: id,
-    checklistId = checklistId,
+    checklistId = parentServerId,
     text = text,
     isDone = isDone,
     note = note,

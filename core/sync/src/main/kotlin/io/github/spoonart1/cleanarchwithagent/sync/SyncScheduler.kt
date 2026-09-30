@@ -78,13 +78,20 @@ class WorkManagerSyncScheduler @Inject constructor(
      * Syncs now, without the debounce delay.
      *
      * Used by the foreground trigger and by the settings screen's "sync now".
-     * [ExistingWorkPolicy.KEEP] so tapping twice does not cancel a sync that is
-     * already running.
+     *
+     * [ExistingWorkPolicy.KEEP] would be wrong here even though it reads as the
+     * safer choice: [requestSync] shares this unique work name, so a debounced
+     * edit still sitting out its delay would be *kept* and "sync now" would
+     * silently do nothing for another five seconds — the one case where the user
+     * is watching. REPLACE drops that pending delay and goes at once. Work
+     * already running is not cancelled by REPLACE, so tapping twice is still
+     * safe, and a replaced edit is not lost: its change is in the outbox, which
+     * the replacement sync drains.
      */
     override fun syncNow() {
         workManager.enqueueUniqueWork(
             SyncWorker.WORK_NAME_ONE_OFF,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(networkConstraints)
                 .setBackoffCriteria(

@@ -528,4 +528,267 @@ class SyncEngineTest {
         )
         assertEquals(SyncStatus.CONFLICT, stored.syncStatus)
     }
+
+    // --- Item parent identity on the wire ------------------------------------
+    // An item names its parent by the id the SERVER knows, never the local one.
+    // Sending the local id made the pull's getChecklistByServerId lookup miss,
+    // so every echoed item was dropped and the list read "0 of 0".
+
+    @Test
+    fun `test sync when an item is pushed should send the parent server id on the wire`() = runTest {
+        // Given a parent checklist whose local id differs from its server id
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+
+        // And an item on it queued for push
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1", text = "Check the gauge"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // When
+        engine.sync()
+
+        // Then the wire model carries the parent's server id, not "c1"
+        assertEquals(
+            "the wire checklistId must be the parent's server id, or the pull cannot match it",
+            "srv-c1",
+            network.pushed.single().item?.checklistId,
+        )
+    }
+
+    @Test
+    fun `test sync when the server echoes a pushed item should keep it attached to its parent`() = runTest {
+        // Given a synced parent and a done item on it, queued for push
+        checklistDao.upsertChecklist(
+            checklistEntity(id = "c1", serverId = "srv-c1", syncStatus = SyncStatus.SYNCED),
+        )
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(
+                id = "i1",
+                checklistId = "c1",
+                text = "Check the gauge",
+                isDone = true,
+                updatedAt = 1_000L,
+            ),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // When the item is pushed
+        engine.sync()
+
+        // And the server echoes it back on a later pull, as it would
+        val assignedServerId = checklistDao.getItem("i1")!!.serverId!!
+        network.pullResponse = SyncResponse(
+            items = listOf(
+                NetworkChecklistItem(
+                    id = assignedServerId,
+                    checklistId = "srv-c1",
+                    text = "Check the gauge",
+                    isDone = true,
+                    updatedAt = 9_999L,
+                ),
+            ),
+            syncToken = "token-2",
+        )
+        engine.sync()
+
+        // Then the item is still on its parent and still done: the count reads
+        // 1 of 1 rather than 0 of 0.
+        val stored = checklistDao.getItemByServerId(assignedServerId)
+        assertEquals(
+            "the echoed item must stay attached to its local parent",
+            "c1",
+            stored?.checklistId,
+        )
+        assertEquals("the done state must survive the round trip", true, stored?.isDone)
+    }
+
+    // --- Deferred items ------------------------------------------------------
+    // An item cannot be pushed before its parent has a server id, because the
+    // request has to name the parent the way the server knows it.
+
+    @Test
+    fun `test sync when an item parent has no server id should defer the push`() = runTest {
+        // Given a parent that has never been pushed, so it has no server id
+        checklistDao.upsertChecklist(checklistEntity(id = "c1"))
+
+        // And an item on it queued for push
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // When
+        engine.sync()
+
+        // Then nothing was sent, and the entry waits rather than being discarded
+        assertTrue("an item with no parent server id must not be sent", network.pushed.isEmpty())
+        assertEquals(
+            "the deferred entry must stay queued",
+            listOf("op-i1"),
+            outboxDao.pendingOperations().map { it.operationId },
+        )
+    }
+
+    @Test
+    fun `test sync when the parent gains a server id should push the deferred item on a later pass`() = runTest {
+        // Given a deferred item whose parent has not been pushed
+        checklistDao.upsertChecklist(checklistEntity(id = "c1"))
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+        engine.sync()
+
+        // When the parent is queued for push. Only the outbox entry is added:
+        // re-upserting the checklist row would REPLACE it, and the cascade on
+        // checklist_items would take the item with it.
+        outboxDao.insert(outboxEntity(operationId = "op-c1", entityId = "c1", createdAt = 1))
+        engine.sync()
+
+        // And one more sync runs. The item is queued ahead of its parent, so it
+        // is examined before the parent's push in that pass and only becomes
+        // sendable on the one after — deferred, never dropped.
+        engine.sync()
+
+        // Then the item follows, and the outbox drains
+        val parentServerId = checklistDao.getChecklist("c1")!!.serverId
+        assertEquals(
+            "the item must be sent once the parent is known to the server",
+            parentServerId,
+            network.pushed.mapNotNull { it.item }.single().checklistId,
+        )
+        assertTrue("the outbox must drain", outboxDao.pendingOperations().isEmpty())
+
+        // And the ordinary deferrals it took to get there did not spend the
+        // whole attempt budget: bounding deferrals must not break this path.
+        assertEquals(
+            "a normally deferred item must still reach the server, not be abandoned",
+            SyncStatus.SYNCED,
+            checklistDao.getItem("i1")!!.syncStatus,
+        )
+    }
+
+    @Test
+    fun `test sync when an item is deferred once should count the attempt and keep it queued`() = runTest {
+        // Given a parent that has never been pushed, so it has no server id
+        checklistDao.upsertChecklist(checklistEntity(id = "c1"))
+
+        // And an item on it queued for push
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+            ),
+        )
+
+        // When
+        engine.sync()
+
+        // Then the deferral is counted against the entry's budget
+        val queued = outboxDao.pendingOperations().single()
+        assertEquals(
+            "a deferral must spend an attempt, or a stuck entry would never surface",
+            1,
+            queued.attemptCount,
+        )
+
+        // And the entry is still queued: deferring is not failing
+        assertEquals("op-i1", queued.operationId)
+        assertEquals(
+            "one deferral must not abandon the item",
+            SyncStatus.PENDING,
+            checklistDao.getItem("i1")!!.syncStatus,
+        )
+    }
+
+    @Test
+    fun `test sync when an item defers past the attempt limit should abandon it and mark it failed`() = runTest {
+        // Given a parent that will never gain a server id, as happens when the
+        // in-memory backend restarts and forgets a checklist the device synced
+        checklistDao.upsertChecklist(checklistEntity(id = "c1"))
+
+        // And an item on it that has already deferred up to the limit minus one
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1"),
+            operation = outboxEntity(
+                operationId = "op-i1",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+                attemptCount = SyncEngine.MAX_PUSH_ATTEMPTS - 1,
+            ),
+        )
+
+        // When the next pass defers it once more
+        engine.sync()
+
+        // Then the entry is abandoned rather than deferring forever, invisibly
+        assertTrue(
+            "an endlessly deferred entry must not sit in the outbox unnoticed",
+            outboxDao.pendingOperations().isEmpty(),
+        )
+
+        // And the item surfaces as failed, so the user can see it
+        assertEquals(
+            "the abandoned item must be visible as FAILED",
+            SyncStatus.FAILED,
+            checklistDao.getItem("i1")!!.syncStatus,
+        )
+    }
+
+    @Test
+    fun `test sync when one item is deferred should still push the rest of the queue`() = runTest {
+        // Given an item whose parent has no server id, queued first
+        checklistDao.upsertChecklist(checklistEntity(id = "c1"))
+        checklistDao.upsertItemWithOutbox(
+            item = itemEntity(id = "i1", checklistId = "c1"),
+            operation = outboxEntity(
+                operationId = "op-deferred",
+                entityId = "i1",
+                entityType = OutboxEntityType.CHECKLIST_ITEM,
+                createdAt = 100,
+            ),
+        )
+
+        // And an unrelated checklist queued behind it
+        checklistDao.upsertChecklistWithOutbox(
+            checklist = checklistEntity(id = "c2", title = "Inspection"),
+            operation = outboxEntity(operationId = "op-other", entityId = "c2", createdAt = 200),
+        )
+
+        // When
+        engine.sync()
+
+        // Then the deferred entry does not block the one behind it
+        assertEquals(
+            "a deferred item must not stall the queue",
+            listOf("op-other"),
+            network.pushed.map { it.operationId },
+        )
+        assertEquals(
+            "only the deferred entry stays queued",
+            listOf("op-deferred"),
+            outboxDao.pendingOperations().map { it.operationId },
+        )
+    }
 }
